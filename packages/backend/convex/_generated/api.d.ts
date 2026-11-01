@@ -15,6 +15,7 @@ import type * as edge from "../edge.js";
 import type * as edgeData from "../edgeData.js";
 import type * as jobs from "../jobs.js";
 import type * as lib from "../lib.js";
+import type * as migrations from "../migrations.js";
 import type * as projects from "../projects.js";
 import type * as versions from "../versions.js";
 
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   edgeData: typeof edgeData;
   jobs: typeof jobs;
   lib: typeof lib;
+  migrations: typeof migrations;
   projects: typeof projects;
   versions: typeof versions;
 }>;

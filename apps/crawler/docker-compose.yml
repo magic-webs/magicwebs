@@ -1,0 +1,16 @@
+# Run several crawler workers on the VPS. They pull jobs from Convex, so
+# scaling is just raising `replicas`.
+services:
+  crawler:
+    build:
+      context: ../..
+      dockerfile: apps/crawler/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    init: true
+    ipc: host
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 2g

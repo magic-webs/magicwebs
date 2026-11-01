@@ -1,0 +1,20 @@
+{
+  "name": "@magicwebs/renderer",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.tsx",
+    "./server": "./src/server.tsx"
+  },
+  "dependencies": {
+    "@magicwebs/page-schema": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

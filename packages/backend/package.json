@@ -1,0 +1,18 @@
+{
+  "name": "@magicwebs/backend",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": { "./convex/*": "./convex/*.js" },
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy",
+    "codegen": "convex codegen",
+    "typecheck": "tsc --noEmit -p convex"
+  },
+  "dependencies": {
+    "@magicwebs/page-schema": "workspace:*",
+    "convex": "^1.49.0",
+    "zod": "^4.6.7"
+  }
+}

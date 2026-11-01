@@ -1,0 +1,18 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "magicwebs-sites",
+  "main": "src/index.tsx",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "kv_namespaces": [
+    // Create with `wrangler kv namespace create SITES` and paste the id here.
+    // Convex writes to the same namespace (CLOUDFLARE_KV_NAMESPACE_ID).
+    { "binding": "SITES", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ],
+  "routes": [
+    // Platform subdomains: <slug>.magicwebs.site
+    { "pattern": "*.magicwebs.site/*", "zone_name": "magicwebs.site" },
+    // Custom hostnames from Cloudflare for SaaS arrive through the fallback origin.
+    { "pattern": "*/*", "zone_name": "magicwebs.site" }
+  ]
+}

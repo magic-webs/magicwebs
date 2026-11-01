@@ -6,7 +6,7 @@ import type { Id } from "./_generated/dataModel"
 import type { QueryCtx } from "./_generated/server"
 
 export function sitesRootDomain(): string {
-  return process.env.SITES_ROOT_DOMAIN ?? "magicwebs.site"
+  return process.env.SITES_ROOT_DOMAIN ?? "magicwebs.ai"
 }
 
 /** Machine-to-machine calls (crawler workers) must present the shared secret. */

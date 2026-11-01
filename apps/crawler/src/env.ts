@@ -17,7 +17,7 @@ export const env = {
         endpoint: required("R2_ENDPOINT"),
         accessKeyId: required("R2_ACCESS_KEY_ID"),
         secretAccessKey: required("R2_SECRET_ACCESS_KEY"),
-        /** Public base URL the bucket is served from, e.g. https://assets.magicwebs.site */
+        /** Public base URL the bucket is served from, e.g. https://assets.magicwebs.ai */
         publicUrl: required("R2_PUBLIC_URL").replace(/\/$/, ""),
       }
     : null,

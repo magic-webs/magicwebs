@@ -12,6 +12,7 @@
     "dev:api": "bun --filter @magicwebs/api dev",
     "dev:crawler": "bun --filter @magicwebs/crawler start",
     "dev:edge": "bun --filter @magicwebs/edge dev",
+    "secrets": "bun scripts/generate-secrets.ts",
     "test": "bun test",
     "typecheck": "bun run --filter '*' typecheck"
   },

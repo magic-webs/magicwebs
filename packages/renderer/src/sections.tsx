@@ -21,6 +21,21 @@ export function safeSrc(src: string | undefined): string | undefined {
   return undefined
 }
 
+/** Render "**word**" as a highlighted span; everything else stays plain text. */
+export function Rich({ text }: { text: string | undefined }) {
+  if (!text) return null
+  if (!text.includes("**")) return text
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
+      <span key={i} className="mw-hl">
+        {part.slice(2, -2)}
+      </span>
+    ) : (
+      part
+    ),
+  )
+}
+
 function Img({ image, className }: { image: Image | undefined; className?: string }) {
   const src = safeSrc(image?.src)
   if (!image || !src) return null
@@ -73,8 +88,16 @@ function Heading({
   const H = level === 1 ? "h1" : "h2"
   return (
     <div className={`mw-stack${center ? " mw-center" : ""}`}>
-      {eyebrow && <div className="mw-eyebrow">{eyebrow}</div>}
-      {heading && <H className={level === 1 ? "mw-h1" : "mw-h2"}>{heading}</H>}
+      {eyebrow && (
+        <div className="mw-eyebrow">
+          <Rich text={eyebrow} />
+        </div>
+      )}
+      {heading && (
+        <H className={level === 1 ? "mw-h1" : "mw-h2"}>
+          <Rich text={heading} />
+        </H>
+      )}
       {subheading && <p className="mw-lead">{subheading}</p>}
     </div>
   )
@@ -129,7 +152,26 @@ function Navbar({ section }: { section: SectionOf<"navbar"> }) {
             </li>
           ))}
         </ul>
-        <Btn link={p.cta} variant="primary" />
+        <div className="mw-nav-cta">
+          <Btn link={p.cta} variant="primary" />
+        </div>
+        {(p.links.length > 0 || p.cta) && (
+          <details className="mw-menu">
+            <summary aria-label="Menu">
+              <span />
+              <span />
+              <span />
+            </summary>
+            <div className="mw-menu-panel">
+              {p.links.map((link, i) => (
+                <a key={i} href={safeHref(link.href)}>
+                  {link.label}
+                </a>
+              ))}
+              <Btn link={p.cta} variant="primary" />
+            </div>
+          </details>
+        )}
       </nav>
     </header>
   )
@@ -139,8 +181,14 @@ function Hero({ section }: { section: SectionOf<"hero"> }) {
   const p = section.props
   const text = (center: boolean) => (
     <div className={`mw-stack${center ? " mw-center" : ""}`} style={{ gap: 20 }}>
-      {p.eyebrow && <div className="mw-eyebrow">{p.eyebrow}</div>}
-      <h1 className="mw-h1">{p.heading}</h1>
+      {p.eyebrow && (
+        <div className="mw-eyebrow">
+          <Rich text={p.eyebrow} />
+        </div>
+      )}
+      <h1 className="mw-h1">
+        <Rich text={p.heading} />
+      </h1>
       {p.subheading && <p className="mw-lead">{p.subheading}</p>}
       <Actions primary={p.primaryCta} secondary={p.secondaryCta} />
     </div>
@@ -192,13 +240,17 @@ function Logos({ section }: { section: SectionOf<"logos"> }) {
           {p.title}
         </p>
       )}
-      <div className="mw-logos">
+      <div className="mw-logos" data-monochrome={p.monochrome ? "true" : undefined}>
         {p.logos.map((logo, i) => (
           <Img key={i} image={logo} />
         ))}
       </div>
     </Shell>
   )
+}
+
+function mobileCols(value: number | undefined) {
+  return Math.min(Math.max(Math.round(value ?? 1) || 1, 1), 2)
 }
 
 function Features({ section }: { section: SectionOf<"features"> }) {
@@ -209,7 +261,13 @@ function Features({ section }: { section: SectionOf<"features"> }) {
       <Heading eyebrow={p.eyebrow} heading={p.heading} subheading={p.subheading} center />
       <div
         className="mw-grid"
-        style={{ "--mw-cols": p.variant === "list" ? 1 : cols, marginTop: 56 } as CSSProperties}
+        style={
+          {
+            "--mw-cols": p.variant === "list" ? 1 : cols,
+            "--mw-mcols": mobileCols(p.mobileColumns),
+            marginTop: 56,
+          } as CSSProperties
+        }
       >
         {p.items.map((item, i) => (
           <div key={i} className={p.variant === "cards" ? "mw-card" : undefined} style={{ textAlign: "left" }}>
@@ -237,8 +295,14 @@ function Content({ section }: { section: SectionOf<"content"> }) {
     <Shell section={section}>
       <div className={`mw-split${p.imagePosition === "left" ? " mw-reverse" : ""}`}>
         <div className="mw-stack" style={{ gap: 18 }}>
-          {p.eyebrow && <div className="mw-eyebrow">{p.eyebrow}</div>}
-          <h2 className="mw-h2">{p.heading}</h2>
+          {p.eyebrow && (
+            <div className="mw-eyebrow">
+              <Rich text={p.eyebrow} />
+            </div>
+          )}
+          <h2 className="mw-h2">
+            <Rich text={p.heading} />
+          </h2>
           <p className="mw-muted" style={{ fontSize: "1.05rem", whiteSpace: "pre-line" }}>
             {p.body}
           </p>
@@ -248,6 +312,16 @@ function Content({ section }: { section: SectionOf<"content"> }) {
                 <li key={i}>{b}</li>
               ))}
             </ul>
+          )}
+          {p.stats && p.stats.length > 0 && (
+            <div className="mw-inline-stats">
+              {p.stats.map((stat, i) => (
+                <div key={i}>
+                  <div className="mw-inline-stat">{stat.value}</div>
+                  <div className="mw-muted">{stat.label}</div>
+                </div>
+              ))}
+            </div>
           )}
           {p.cta && (
             <div className="mw-actions">
@@ -365,11 +439,24 @@ function Gallery({ section }: { section: SectionOf<"gallery"> }) {
       <Heading heading={p.heading} center />
       <div
         className="mw-grid mw-gallery"
-        style={{ "--mw-cols": Math.min(Math.max(p.columns, 1), 4), marginTop: p.heading ? 48 : 0 } as CSSProperties}
+        style={
+          {
+            "--mw-cols": Math.min(Math.max(p.columns, 1), 4),
+            "--mw-mcols": mobileCols(p.mobileColumns),
+            marginTop: p.heading ? 48 : 0,
+          } as CSSProperties
+        }
       >
-        {p.images.map((image, i) => (
-          <Img key={i} image={image} />
-        ))}
+        {p.images.map((image, i) =>
+          image.caption ? (
+            <figure key={i} className="mw-figure">
+              <Img image={image} />
+              <figcaption>{image.caption}</figcaption>
+            </figure>
+          ) : (
+            <Img key={i} image={image} />
+          ),
+        )}
       </div>
     </Shell>
   )
@@ -380,7 +467,9 @@ function Cta({ section }: { section: SectionOf<"cta"> }) {
   return (
     <Shell section={section}>
       <div className="mw-stack mw-center" style={{ gap: 20 }}>
-        <h2 className="mw-h2">{p.heading}</h2>
+        <h2 className="mw-h2">
+          <Rich text={p.heading} />
+        </h2>
         {p.subheading && <p className="mw-lead">{p.subheading}</p>}
         <Actions primary={p.primaryCta} secondary={p.secondaryCta} />
       </div>

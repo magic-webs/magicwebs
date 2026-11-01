@@ -17,7 +17,14 @@ Reproduce the original as faithfully as the registry allows:
 - Use the exact image URLs from the extracted data. Never make up image URLs; omit an image if you don't have its URL.
 - Theme: take colors from the computed styles (convert rgb() to hex), the heading and body font families as they appear, and list the ones that are Google Fonts in googleFonts. Estimate radius from button border-radius.
 - Per-section style: set background, text color and paddingY when they differ from the theme, so alternating backgrounds and dark sections match the screenshots.
-- Use the mobile screenshot to choose layouts that collapse the same way.
+- Words in a heading or eyebrow that have their own color (e.g. one green word in a black heading): wrap them in **double asterisks** and set theme.colors.highlight to that color.
+- Set style.align to "center" for sections whose text is centered in the screenshots.
+- Short figure rows inside a text block (e.g. "60% Query Resolved", "24x7 Support") go in the content section's stats, not in bullets.
+- Image grids with a label under each image: use gallery with each image's caption.
+- Logos: set monochrome only when the original logos are gray.
+- Navbar and footer: leave brand empty when the logo image already shows the name.
+- Use the mobile screenshot to choose layouts that collapse the same way, including mobileColumns (1 or 2) for features and galleries.
+- Prefer typed sections over "custom": typed sections are responsive, custom ones often are not. If you do use custom, give fixed widths and multi-column layouts a mobileStyle.
 - Where blocks animate into view, set animation to "fade-up" (or the closest match).
 - Section ids: short unique strings like "s_hero".
 - Keep link hrefs as absolute URLs from the extracted data, or "#" when unknown.

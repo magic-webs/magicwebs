@@ -18,6 +18,9 @@ export const ImageSchema = z.object({
   height: z.number().optional(),
 })
 
+// Headings and eyebrows may wrap words in **double asterisks** to render them
+// in the highlight color, e.g. "WhatsApp Business **Automation**".
+
 export const ThemeSchema = z.object({
   colors: z.object({
     background: z.string(),
@@ -27,6 +30,7 @@ export const ThemeSchema = z.object({
     muted: z.string().describe("Subtle surface color, e.g. alternating section background"),
     mutedForeground: z.string(),
     accent: z.string(),
+    highlight: z.string().optional().describe("Color of **highlighted** heading words; defaults to accent"),
     border: z.string(),
   }),
   fonts: z.object({
@@ -115,12 +119,14 @@ export const SectionPropsSchemas = {
   logos: z.object({
     title: z.string().optional(),
     logos: z.array(ImageSchema),
+    monochrome: z.boolean().optional().describe("Show logos in grayscale"),
   }),
   features: z.object({
     eyebrow: z.string().optional(),
     heading: z.string().optional(),
     subheading: z.string().optional(),
     columns: z.number().describe("2, 3 or 4"),
+    mobileColumns: z.number().optional().describe("Columns on phones, 1 or 2 (default 1)"),
     variant: z.enum(["cards", "plain", "list"]),
     items: z.array(
       z.object({
@@ -136,6 +142,10 @@ export const SectionPropsSchemas = {
     heading: z.string(),
     body: z.string(),
     bullets: z.array(z.string()).optional(),
+    stats: z
+      .array(z.object({ value: z.string(), label: z.string() }))
+      .optional()
+      .describe("Short highlighted figures shown in a row, e.g. { value: '24x7', label: 'Support' }"),
     image: ImageSchema.optional(),
     imagePosition: z.enum(["left", "right"]),
     cta: LinkSchema.optional(),
@@ -178,7 +188,8 @@ export const SectionPropsSchemas = {
   gallery: z.object({
     heading: z.string().optional(),
     columns: z.number(),
-    images: z.array(ImageSchema),
+    mobileColumns: z.number().optional().describe("Columns on phones, 1 or 2 (default 1)"),
+    images: z.array(ImageSchema.extend({ caption: z.string().optional().describe("Text shown under the image") })),
   }),
   cta: z.object({
     heading: z.string(),

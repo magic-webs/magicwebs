@@ -28,6 +28,20 @@ const HTML_HEADERS = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
 }
 
+/** Bump when the rendered HTML changes shape, so cached renders are rebuilt. */
+const RENDER_REVISION = 2
+
+/** How often an open page checks for a newer published version. */
+const LIVE_RELOAD_INTERVAL_MS = 4000
+
+/**
+ * Keeps an open page in step with what is published: when the live version
+ * changes, reload and land back at the same scroll position. Hidden tabs don't poll.
+ */
+function liveReloadScript(version: number) {
+  return `<script>(()=>{const v=${version},k="mw-scroll";try{const y=sessionStorage.getItem(k);if(y!==null){sessionStorage.removeItem(k);addEventListener("load",()=>scrollTo(0,+y))}}catch{}let busy=false;async function check(){if(busy||document.hidden)return;busy=true;try{const r=await fetch("/__version",{cache:"no-store"});if(r.ok){const d=await r.json();if(d.version!==v){try{sessionStorage.setItem(k,String(scrollY))}catch{}location.reload()}}}catch{}busy=false}setInterval(check,${LIVE_RELOAD_INTERVAL_MS});document.addEventListener("visibilitychange",check)})()</script>`
+}
+
 function notFound(message: string) {
   return new Response(
     `<!doctype html><meta charset="utf-8"><title>Not found</title><body style="font-family:system-ui;display:grid;place-items:center;min-height:90vh;color:#555"><p>${message}</p></body>`,
@@ -118,19 +132,25 @@ export default {
         { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" } },
       )
     }
+    if (url.pathname === "/__version") {
+      return Response.json({ version: site.version }, { headers: { "Cache-Control": "no-store" } })
+    }
     if (url.pathname !== "/") return notFound("Page not found.")
 
     // The version is part of the cache key, so a new version is rendered fresh
     // without purging anything.
     const cache = caches.default
-    const cacheKey = new Request(`https://render.cache/${projectId}/v${site.version}/${hostname}`)
+    const cacheKey = new Request(`https://render.cache/r${RENDER_REVISION}/${projectId}/v${site.version}/${hostname}`)
     const cached = await cache.match(cacheKey)
     if (cached) return cached
 
     const doc = await loadDoc(env, projectId, site, ctx)
     if (!doc) return notFound("This site hasn't been published yet.")
     const stream = await renderPage(doc, { url: `https://${hostname}/` })
-    const html = await new Response(stream).text()
+    const rendered = await new Response(stream).text()
+    const script = liveReloadScript(site.version)
+    const bodyEnd = rendered.lastIndexOf("</body>")
+    const html = bodyEnd < 0 ? rendered + script : rendered.slice(0, bodyEnd) + script + rendered.slice(bodyEnd)
     const response = new Response(html, {
       headers: { ...HTML_HEADERS, ETag: `"${projectId}-v${site.version}"` },
     })

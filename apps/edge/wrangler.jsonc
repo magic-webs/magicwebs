@@ -5,6 +5,10 @@
   "account_id": "917c7f5184677666a15239fbec9a149f",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
+  "vars": {
+    // Convex HTTP actions URL; the worker asks it which version is live.
+    "CONVEX_SITE_URL": "https://watchful-robin-407.convex.site"
+  },
   "kv_namespaces": [
     // Create with `wrangler kv namespace create SITES` and paste the id here.
     // Convex writes to the same namespace (CLOUDFLARE_KV_NAMESPACE_ID).

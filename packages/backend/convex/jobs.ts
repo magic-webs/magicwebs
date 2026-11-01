@@ -5,6 +5,7 @@ import { PageDocSchema } from "@magicwebs/page-schema"
 
 import { mutation, query } from "./_generated/server"
 import { assertWorker, getDraft, toStored } from "./lib"
+import { aiUsage } from "./models"
 
 // Crawl jobs are pulled by the Playwright workers on the VPS. Every mutation
 // here requires the shared WORKER_SECRET.
@@ -50,7 +51,7 @@ export const claim = mutation({
 
     await ctx.db.patch(job._id, { status: "running", workerId, claimedAt: now, attempts: job.attempts + 1 })
     await ctx.db.patch(job.projectId, { step: "Opening page" })
-    return { jobId: job._id, projectId: job.projectId, url: job.url }
+    return { jobId: job._id, projectId: job.projectId, url: job.url, model: job.model, effort: job.effort }
   },
 })
 
@@ -66,8 +67,8 @@ export const progress = mutation({
 })
 
 export const complete = mutation({
-  args: { secret: v.string(), jobId: v.id("jobs"), doc: v.any() },
-  handler: async (ctx, { secret, jobId, doc }) => {
+  args: { secret: v.string(), jobId: v.id("jobs"), doc: v.any(), usage: v.optional(aiUsage) },
+  handler: async (ctx, { secret, jobId, doc, usage }) => {
     assertWorker(secret)
     const job = await ctx.db.get(jobId)
     if (!job) throw new ConvexError("Job not found")
@@ -87,8 +88,8 @@ export const complete = mutation({
       results: [`Cloned ${job.url}`],
       createdAt: now,
     })
-    await ctx.db.patch(jobId, { status: "done" })
-    await ctx.db.patch(job.projectId, { status: "ready", step: undefined, error: undefined })
+    await ctx.db.patch(jobId, { status: "done", usage })
+    await ctx.db.patch(job.projectId, { status: "ready", step: undefined, error: undefined, usage })
   },
 })
 

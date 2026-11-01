@@ -8,7 +8,7 @@ import { Providers } from "./providers"
 
 export const metadata: Metadata = {
   title: "Magicwebs",
-  description: "Clone any landing page and edit it with AI.",
+  description: "Turn any website into an editable page and change it with AI.",
 }
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'})

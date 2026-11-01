@@ -1,12 +1,15 @@
 import type { PageDoc } from "@magicwebs/page-schema"
 import { renderPage } from "@magicwebs/renderer/server"
 
-// One Worker serves every published landing page. The hostname selects the
-// project, the published JSON comes from KV, and React renders it to HTML.
-// Publishing writes new JSON to KV, so no page ever needs its own build.
+// One Worker serves every published page. The hostname selects the project,
+// Convex says which version is live, and React renders it to HTML. Asking
+// Convex makes a publish live within seconds; Workers KV (written on every
+// publish) is the fallback when Convex can't be reached.
 
 type Env = {
   SITES: KVNamespace
+  /** Convex HTTP actions URL, e.g. https://watchful-robin-407.convex.site */
+  CONVEX_SITE_URL?: string
 }
 
 type PublishedSite = {
@@ -18,8 +21,9 @@ type PublishedSite = {
 const KV_CACHE_TTL = 60
 const HTML_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
-  // Browsers revalidate; Cloudflare's edge may serve a stale copy while it does.
-  "Cache-Control": "public, max-age=0, s-maxage=60, stale-while-revalidate=600",
+  // Always revalidate so a publish shows up on the next load. Rendering is
+  // cached per version inside the worker, so this stays cheap.
+  "Cache-Control": "public, max-age=0, must-revalidate",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
 }
@@ -31,11 +35,62 @@ function notFound(message: string) {
   )
 }
 
-async function loadSite(env: Env, hostname: string): Promise<{ projectId: string; site: PublishedSite } | null> {
+type LiveVersion = { projectId: string; version: number; publishedAt: number }
+
+async function cachedJson<T>(url: string, ctx: ExecutionContext): Promise<T | null> {
+  const cache = caches.default
+  const key = new Request(url)
+  let response = await cache.match(key)
+  if (!response) {
+    response = await fetch(url)
+    if (response.status === 404) return null
+    if (!response.ok) throw new Error(`Convex responded ${response.status}`)
+    ctx.waitUntil(cache.put(key, response.clone()))
+  }
+  return response.json<T>()
+}
+
+/** Ask Convex which version is live. Returns undefined when Convex is unavailable. */
+async function liveFromConvex(env: Env, hostname: string, ctx: ExecutionContext) {
+  if (!env.CONVEX_SITE_URL) return undefined
+  try {
+    return await cachedJson<LiveVersion>(`${env.CONVEX_SITE_URL}/edge/live?host=${encodeURIComponent(hostname)}`, ctx)
+  } catch (error) {
+    console.error("Convex live lookup failed, using KV:", error)
+    return undefined
+  }
+}
+
+async function loadSite(
+  env: Env,
+  hostname: string,
+  ctx: ExecutionContext,
+): Promise<{ projectId: string; site: PublishedSite | LiveVersion } | null> {
+  const live = await liveFromConvex(env, hostname, ctx)
+  if (live !== undefined) return live && { projectId: live.projectId, site: live }
+
   const projectId = await env.SITES.get(`host:${hostname}`, { cacheTtl: KV_CACHE_TTL })
   if (!projectId) return null
   const site = await env.SITES.get<PublishedSite>(`site:${projectId}`, { type: "json", cacheTtl: KV_CACHE_TTL })
   return site ? { projectId, site } : null
+}
+
+/** The page for a version: from the lookup itself (KV), from Convex, or from KV as a last resort. */
+async function loadDoc(env: Env, projectId: string, site: PublishedSite | LiveVersion, ctx: ExecutionContext) {
+  if ("doc" in site) return site.doc
+  if (env.CONVEX_SITE_URL) {
+    try {
+      const doc = await cachedJson<PageDoc>(
+        `${env.CONVEX_SITE_URL}/edge/doc?projectId=${projectId}&version=${site.version}`,
+        ctx,
+      )
+      if (doc) return doc
+    } catch (error) {
+      console.error("Convex doc fetch failed, using KV:", error)
+    }
+  }
+  const stored = await env.SITES.get<PublishedSite>(`site:${projectId}`, "json")
+  return stored?.doc ?? null
 }
 
 export default {
@@ -52,7 +107,7 @@ export default {
       })
     }
 
-    const found = await loadSite(env, hostname)
+    const found = await loadSite(env, hostname, ctx)
     if (!found) return notFound("This site hasn't been published yet.")
     const { projectId, site } = found
 
@@ -65,14 +120,16 @@ export default {
     }
     if (url.pathname !== "/") return notFound("Page not found.")
 
-    // The version is part of the cache key, so publishing a new version is
-    // picked up as soon as KV propagates, without purging anything.
+    // The version is part of the cache key, so a new version is rendered fresh
+    // without purging anything.
     const cache = caches.default
     const cacheKey = new Request(`https://render.cache/${projectId}/v${site.version}/${hostname}`)
     const cached = await cache.match(cacheKey)
     if (cached) return cached
 
-    const stream = await renderPage(site.doc, { url: `https://${hostname}/` })
+    const doc = await loadDoc(env, projectId, site, ctx)
+    if (!doc) return notFound("This site hasn't been published yet.")
+    const stream = await renderPage(doc, { url: `https://${hostname}/` })
     const html = await new Response(stream).text()
     const response = new Response(html, {
       headers: { ...HTML_HEADERS, ETag: `"${projectId}-v${site.version}"` },

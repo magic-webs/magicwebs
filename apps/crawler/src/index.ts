@@ -16,16 +16,19 @@ async function runOnce(): Promise<boolean> {
   if (!job) return false
 
   const step = (label: string) => convex.mutation(api.jobs.progress, { secret, jobId: job.jobId, step: label })
-  console.log(`[${job.jobId}] cloning ${job.url}`)
+  console.log(`[${job.jobId}] rebuilding ${job.url} (${job.model ?? "default"}, effort ${job.effort ?? "default"})`)
   try {
     const shot = await capture(job.url)
     await step("Analyzing layout and styles")
     const facts = extractFromHtml(shot.html, shot.finalUrl)
     await step("Rebuilding sections with AI")
-    let doc = await reconstruct(shot, facts)
+    const rebuilt = await reconstruct(shot, facts, { model: job.model, effort: job.effort })
+    const usage = rebuilt.usage
+    console.log(`[${job.jobId}] ${usage.inputTokens} in / ${usage.outputTokens} out tokens, $${usage.costUsd?.toFixed(4) ?? "?"}`)
+    let doc = rebuilt.doc
     await step("Copying images")
     doc = await mirrorAssets(doc, job.projectId)
-    await convex.mutation(api.jobs.complete, { secret, jobId: job.jobId, doc })
+    await convex.mutation(api.jobs.complete, { secret, jobId: job.jobId, doc, usage })
     console.log(`[${job.jobId}] done: ${doc.sections.length} sections`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

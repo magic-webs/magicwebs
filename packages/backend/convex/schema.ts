@@ -1,6 +1,8 @@
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
+import { aiEffort, aiModel, aiUsage } from "./models"
+
 // Page documents are stored as `v.any()` and validated with the shared Zod
 // schema from @magicwebs/page-schema, which is the real contract.
 export default defineSchema({
@@ -8,11 +10,17 @@ export default defineSchema({
     name: v.string(),
     slug: v.string(),
     sourceUrl: v.string(),
+    model: v.optional(aiModel),
+    effort: v.optional(aiEffort),
+    /** Usage of the latest successful rebuild. */
+    usage: v.optional(aiUsage),
     status: v.union(v.literal("cloning"), v.literal("ready"), v.literal("failed")),
     step: v.optional(v.string()),
     error: v.optional(v.string()),
     publishedVersionId: v.optional(v.id("versions")),
     publishedAt: v.optional(v.number()),
+    /** Pending auto-publish after the latest edit. */
+    autoPublishId: v.optional(v.id("_scheduled_functions")),
     createdAt: v.number(),
   }).index("by_slug", ["slug"]),
 
@@ -43,6 +51,9 @@ export default defineSchema({
   jobs: defineTable({
     projectId: v.id("projects"),
     url: v.string(),
+    model: v.optional(aiModel),
+    effort: v.optional(aiEffort),
+    usage: v.optional(aiUsage),
     status: v.union(v.literal("queued"), v.literal("running"), v.literal("done"), v.literal("failed")),
     attempts: v.number(),
     workerId: v.optional(v.string()),

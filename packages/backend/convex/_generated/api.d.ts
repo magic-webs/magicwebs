@@ -13,9 +13,11 @@ import type * as domains from "../domains.js";
 import type * as drafts from "../drafts.js";
 import type * as edge from "../edge.js";
 import type * as edgeData from "../edgeData.js";
+import type * as http from "../http.js";
 import type * as jobs from "../jobs.js";
 import type * as lib from "../lib.js";
 import type * as migrations from "../migrations.js";
+import type * as models from "../models.js";
 import type * as projects from "../projects.js";
 import type * as versions from "../versions.js";
 
@@ -31,9 +33,11 @@ declare const fullApi: ApiFromModules<{
   drafts: typeof drafts;
   edge: typeof edge;
   edgeData: typeof edgeData;
+  http: typeof http;
   jobs: typeof jobs;
   lib: typeof lib;
   migrations: typeof migrations;
+  models: typeof models;
   projects: typeof projects;
   versions: typeof versions;
 }>;

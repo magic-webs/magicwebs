@@ -4,6 +4,7 @@ import { emptyPageDoc } from "@magicwebs/page-schema"
 
 import { mutation, query } from "./_generated/server"
 import { sitesRootDomain, slugify } from "./lib"
+import { aiEffort, aiModel } from "./models"
 
 export const list = query({
   args: {},
@@ -22,9 +23,9 @@ export const get = query({
   },
 })
 
-/** Create a project from a public URL and queue it for cloning. */
+/** Create a project from a public URL and queue it to be rebuilt. */
 export const create = mutation({
-  args: { url: v.string(), name: v.optional(v.string()) },
+  args: { url: v.string(), name: v.optional(v.string()), model: v.optional(aiModel), effort: v.optional(aiEffort) },
   handler: async (ctx, args) => {
     let url: URL
     try {
@@ -33,7 +34,7 @@ export const create = mutation({
       throw new ConvexError("That doesn't look like a valid URL")
     }
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      throw new ConvexError("Only http and https URLs can be cloned")
+      throw new ConvexError("Only http and https URLs are supported")
     }
 
     const base = slugify(url.hostname)
@@ -48,12 +49,22 @@ export const create = mutation({
       name,
       slug,
       sourceUrl: url.toString(),
+      model: args.model,
+      effort: args.effort,
       status: "cloning",
       step: "Queued",
       createdAt: now,
     })
     await ctx.db.insert("drafts", { projectId, doc: emptyPageDoc(name), revision: 0, updatedAt: now })
-    await ctx.db.insert("jobs", { projectId, url: url.toString(), status: "queued", attempts: 0, createdAt: now })
+    await ctx.db.insert("jobs", {
+      projectId,
+      url: url.toString(),
+      model: args.model,
+      effort: args.effort,
+      status: "queued",
+      attempts: 0,
+      createdAt: now,
+    })
     await ctx.db.insert("domains", {
       projectId,
       hostname: `${slug}.${sitesRootDomain()}`,
@@ -75,6 +86,8 @@ export const reclone = mutation({
     await ctx.db.insert("jobs", {
       projectId,
       url: project.sourceUrl,
+      model: project.model,
+      effort: project.effort,
       status: "queued",
       attempts: 0,
       createdAt: Date.now(),

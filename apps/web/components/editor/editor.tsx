@@ -8,6 +8,7 @@ import { useState } from "react"
 import { api } from "@magicwebs/backend/convex/_generated/api"
 import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -63,6 +64,9 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
   const doc = draft.doc
   const selected = doc.sections.find((s) => s.id === selectedId) ?? null
   const isEmpty = doc.sections.length === 0
+  // Every edit publishes itself about a second later; until then it is pending.
+  const hasUnpublishedChanges = !project.publishedAt || draft.updatedAt > project.publishedAt
+  const autoPublishing = hasUnpublishedChanges && !!project.autoPublishId
 
   async function onPublish() {
     setPublishing(true)
@@ -81,6 +85,11 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
         </Button>
         <span className="truncate text-sm font-medium">{project.name}</span>
         <ProjectStatus status={project.status} published={!!project.publishedVersionId} />
+        {project.publishedVersionId && hasUnpublishedChanges && (
+          <Badge variant="outline" className="hidden border-amber-500/50 text-amber-600 sm:inline-flex dark:text-amber-400">
+            {autoPublishing ? "Going live…" : "Unpublished changes"}
+          </Badge>
+        )}
 
         <div className="mx-auto hidden items-center gap-1 rounded-lg border p-0.5 md:flex">
           {DEVICES.map(({ id, icon: Icon, label }) => (
@@ -110,9 +119,14 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
               <span className="hidden lg:inline">View live</span>
             </Button>
           )}
-          <Button size="sm" onClick={onPublish} disabled={publishing || isEmpty || project.status === "cloning"}>
-            {publishing && <Spinner />}
-            Publish
+          <Button
+            size="sm"
+            onClick={onPublish}
+            disabled={publishing || autoPublishing || isEmpty || project.status === "cloning" || !hasUnpublishedChanges}
+            title={hasUnpublishedChanges ? "Make the current draft live now." : "Edits go live automatically."}
+          >
+            {(publishing || autoPublishing) && <Spinner />}
+            {!hasUnpublishedChanges ? "Published" : project.publishedVersionId ? "Publish changes" : "Publish"}
           </Button>
         </div>
       </header>
@@ -153,12 +167,12 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
               {project.status === "cloning" ? (
                 <div className="flex flex-col items-center gap-3">
                   <Spinner className="size-6" />
-                  <p className="font-medium">Cloning {new URL(project.sourceUrl).hostname}</p>
+                  <p className="font-medium">Building from {new URL(project.sourceUrl).hostname}</p>
                   <p className="text-sm text-muted-foreground">{project.step ?? "Working"}…</p>
                 </div>
               ) : (
                 <div className="flex max-w-sm flex-col items-center gap-3">
-                  <p className="font-medium">Cloning failed</p>
+                  <p className="font-medium">Build failed</p>
                   <p className="text-sm text-muted-foreground">{project.error}</p>
                   <Button variant="outline" onClick={() => reclone({ projectId })}>
                     <RotateCw />

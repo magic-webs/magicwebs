@@ -5,6 +5,7 @@ import { applyOps as applyPageOps, OpError, OpSchema, outline, type PageDoc } fr
 
 import { mutation, query } from "./_generated/server"
 import { getDraft, toStored } from "./lib"
+import { scheduleAutoPublish } from "./versions"
 
 /** The live draft. Editors subscribe to this, so every edit shows up instantly. */
 export const get = query({
@@ -71,6 +72,7 @@ export const applyOps = mutation({
       results: next.results,
       createdAt: now,
     })
+    await scheduleAutoPublish(ctx, args.projectId)
     return { revision, results: next.results }
   },
 })

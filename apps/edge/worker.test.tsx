@@ -23,7 +23,7 @@ const get = (url: string) => worker.fetch(new Request(url), env as any, ctx as a
 test("renders published page with all section types", async () => {
   const res = await get("https://acme.magicwebs.site/")
   expect(res.status).toBe(200)
-  expect(res.headers.get("cache-control")).toContain("s-maxage")
+  expect(res.headers.get("cache-control")).toContain("must-revalidate")
   const html = await res.text()
   for (const t of SECTION_TYPES) expect(html).toContain(`data-section-type="${t}"`)
   expect(html).toContain("<title>Edge test</title>")

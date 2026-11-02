@@ -85,6 +85,7 @@ export async function cloneExact(
 
     await progress("Recording scroll animations")
     await page.evaluate(scrollAndScan)
+    const scrolled = await page.evaluate(recordScrollEffects, { budgetMs: 35_000 })
     await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {})
 
     const facts = extractFromHtml(await page.content(), page.url())
@@ -110,7 +111,7 @@ export async function cloneExact(
         `Exact copy is ${kb(bytes)} (markup ${kb(result.stats.htmlBytes)}, CSS ${kb(result.css.length)}), over the ${kb(maxBytes)} limit`,
       )
     }
-    return { doc, stats: { ...prepared, ...result.stats, bytes } }
+    return { doc, stats: { ...scrolled, ...prepared, ...result.stats, bytes } }
   } finally {
     await context.close()
   }
@@ -261,11 +262,30 @@ function observeInit() {
   }, 150)
 }
 
-/** Scroll slowly through the page so lazy content loads and reveals fire, scanning as it goes. */
+/**
+ * Scroll slowly through the page so lazy content loads and reveals fire,
+ * scanning as it goes. Inline styles that change while scrolling are noted
+ * with the scroll range they changed in, for recordScrollEffects.
+ */
 async function scrollAndScan() {
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
-  const scan = ((window as unknown as Record<string, unknown>).__mwScan as () => void) ?? (() => {})
+  const w = window as unknown as Record<string, unknown>
+  const scan = (w.__mwScan as () => void) ?? (() => {})
+  const moved = new Map<Element, { min: number; max: number }>()
+  const observer = new MutationObserver((records) => {
+    const y = window.scrollY
+    for (const r of records) {
+      const range = moved.get(r.target as Element)
+      if (range) {
+        range.min = Math.min(range.min, y)
+        range.max = Math.max(range.max, y)
+      } else if (moved.size < 400) moved.set(r.target as Element, { min: y, max: y })
+    }
+  })
   scan()
+  // Changes before the first scroll are load-time animation, not scroll effects.
+  await wait(300)
+  observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["style"] })
   const step = Math.max(240, window.innerHeight * 0.45)
   for (let y = 0, i = 0; y < document.documentElement.scrollHeight && y < 40000 && i < 220; i++) {
     scan()
@@ -276,6 +296,160 @@ async function scrollAndScan() {
   await wait(1500)
   window.scrollTo(0, 0)
   await wait(1200)
+  observer.disconnect()
+  w.__mwMoved = moved
+}
+
+type ScrollEffectArgs = { budgetMs: number }
+
+/**
+ * Scroll-linked effects: script-driven sticky elements (Elementor sticky and
+ * the like, which switch to position:fixed) and inline styles scrubbed by the
+ * scroll position (GSAP ScrollTrigger, parallax, motion effects). Elements
+ * whose style changed while scrolling are sampled at fixed scroll positions;
+ * sticky ones are marked for CSS position:sticky, and styles that follow the
+ * scroll back and forth are stored as keyframes for the runtime to replay.
+ */
+async function recordScrollEffects({ budgetMs }: ScrollEffectArgs) {
+  const started = performance.now()
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  const w = window as unknown as Record<string, unknown>
+  const moved = w.__mwMoved as Map<Element, { min: number; max: number }> | undefined
+  const CAROUSEL = ".swiper,.swiper-container,.slick-slider,.splide,.owl-carousel,.flickity-enabled,.glide,.keen-slider,.embla"
+  const vh = window.innerHeight
+  let candidates = [...(moved ?? new Map()).keys()].filter(
+    (el) =>
+      el.isConnected &&
+      !el.closest(CAROUSEL) &&
+      !el.hasAttribute("data-aos") &&
+      !/(^|\s)(wow|animated|animate__animated)(\s|$)/.test(el.getAttribute("class") ?? ""),
+  )
+  // Elements that keep changing while the page stands still are animations or
+  // marquees. Scrubbed ones may still be easing back to the top; give them time.
+  const styleOf = (el: Element) => el.getAttribute("style") ?? ""
+  let before = candidates.map(styleOf)
+  for (let t = 0; t < 3000; t += 500) {
+    await wait(500)
+    const now = candidates.map(styleOf)
+    const changing = now.filter((s, i) => s !== before[i]).length
+    before = now
+    if (!changing) break
+  }
+  await wait(700)
+  candidates = candidates.filter((el, i) => styleOf(el) === before[i]).slice(0, 60)
+  if (!candidates.length) return { sticky: 0, scrollEffects: 0, scrollCandidates: 0, scrollSamples: 0 }
+
+  const ranges = candidates.map((el) => moved!.get(el)!)
+  const maxY = document.documentElement.scrollHeight - vh
+  const lo = Math.max(0, Math.min(...ranges.map((r) => r.min)) - vh)
+  const hi = Math.min(maxY, Math.max(...ranges.map((r) => r.max)) + vh)
+  const step = Math.max(vh / 3, (hi - lo) / 19)
+  const styleMap = (el: Element) => {
+    const s = (el as HTMLElement).style
+    const map: Record<string, string> = {}
+    for (let i = 0; i < s.length; i++) map[s[i]] = s.getPropertyValue(s[i])
+    return map
+  }
+  // Computed values of the inline properties, for when units change on the way.
+  const computedMap = (el: Element, inline: Record<string, string>) => {
+    const s = getComputedStyle(el)
+    return Object.fromEntries(Object.keys(inline).map((p) => [p, s.getPropertyValue(p)]))
+  }
+  // Scrubbed animations start on the next scroll event and ease towards their
+  // target for a second or two, so wait until styles stop changing.
+  const settle = async () => {
+    await wait(250)
+    let last = candidates.map(styleOf).join("\n")
+    for (let t = 0, still = 0; t < 2500 && still < 3; t += 100) {
+      await wait(100)
+      const now = candidates.map(styleOf).join("\n")
+      still = now === last ? still + 1 : 0
+      last = now
+    }
+  }
+  // Positions are measured against an ancestor that scrolls with the page, so
+  // the runtime can replay them wherever the block ends up.
+  const isPinned = (el: Element) => /^(fixed|sticky)$/.test(getComputedStyle(el).position)
+  const anchors = candidates.map((el) => {
+    let anchor = el.parentElement ?? document.body
+    let hops = 1
+    for (let p: Element | null = el, n = 0; p && p !== document.body; p = p.parentElement, n++) {
+      if (isPinned(p) || moved!.has(p)) {
+        anchor = p.parentElement ?? document.body
+        hops = n + 1
+      }
+    }
+    return { anchor, hops }
+  })
+  const samples: { at: number[]; styles: Record<string, string>[]; computed: Record<string, string>[] }[] = []
+  for (let y = lo; y <= hi + 1 && performance.now() - started < budgetMs; y += step) {
+    window.scrollTo(0, y)
+    await settle()
+    const styles = candidates.map(styleMap)
+    samples.push({
+      at: anchors.map((a) => -a.anchor.getBoundingClientRect().top),
+      styles,
+      computed: candidates.map((el, i) => computedMap(el, styles[i])),
+    })
+  }
+  // Back to the start: effects driven by the scroll position return with it.
+  window.scrollTo(0, lo)
+  await settle()
+  const returned = candidates.map((el) => styleMap(el))
+  window.scrollTo(0, 0)
+  await settle()
+  await wait(400)
+
+  let sticky = 0
+  let scrollEffects = 0
+  const SKIP_PROP = /^(position|display|visibility|content|will-change|transition.*|animation.*|pointer-events)$/
+  candidates.forEach((el, i) => {
+    if (samples.length < 3) return
+    const maps = samples.map((s) => s.styles[i])
+    const atTop = styleMap(el)
+    // Turned fixed by script while scrolling: becomes CSS sticky (see prepareInPage).
+    const stuck = maps.find((m) => m.position === "fixed")
+    if (stuck && atTop.position !== "fixed" && !isPinned(el)) {
+      el.setAttribute("data-mw-stick", stuck.top || "0px")
+      sticky++
+      return
+    }
+    const props = [...new Set(maps.flatMap((m) => Object.keys(m)))].filter((p) => {
+      if (SKIP_PROP.test(p)) return false
+      const values = maps.map((m) => m[p] ?? "")
+      return values.every((v) => /\d/.test(v)) && new Set(values).size >= 3 && returned[i][p] === maps[0][p]
+    })
+    if (!props.length) return
+    const at = samples.map((s) => Math.round(s.at[i]))
+    // Mixed units ("20em" at rest, "206px" mid-scrub) can't be interpolated; computed values can.
+    const shape = (v: string) => v.replace(/-?\d*\.?\d+(?:e-?\d+)?/gi, "#")
+    const values = Object.fromEntries(
+      props.map((p) => {
+        const inline = maps.map((m) => m[p] ?? "")
+        const computed = samples.map((s) => s.computed[i][p] ?? "")
+        const mixed = new Set(inline.map(shape)).size > 1 && new Set(computed.map(shape)).size === 1
+        return [p, mixed ? computed : inline]
+      }),
+    )
+    // Only the stretch where something changes, plus the values either side of it.
+    let first = 0
+    let last = maps.length - 1
+    const same = (a: number, b: number) => props.every((p) => values[p][a] === values[p][b])
+    while (first < last && same(first, first + 1)) first++
+    while (last > first && same(last, last - 1)) last--
+    const keep = maps.map((_, j) => j).slice(first, last + 1)
+    el.setAttribute(
+      "data-mw-scrollfx",
+      JSON.stringify({
+        u: anchors[i].hops,
+        w: window.innerWidth,
+        y: keep.map((j) => at[j]),
+        p: Object.fromEntries(props.map((p) => [p, keep.map((j) => values[p][j])])),
+      }),
+    )
+    scrollEffects++
+  })
+  return { sticky, scrollEffects, scrollCandidates: candidates.length, scrollSamples: samples.length }
 }
 
 type PrepareArgs = { sheets: Record<string, string>; maxTriggers: number; budgetMs: number }
@@ -330,11 +504,13 @@ async function prepareInPage({ sheets, maxTriggers, budgetMs }: PrepareArgs) {
   const inside = (el: Node, roots: Element[]) => roots.some((r) => r === el || r.contains(el))
 
   // Small fixed elements outside the blocks: WhatsApp / chat / back-to-top buttons.
+  // Chat widgets are often a zero-size fixed box with positioned buttons inside.
+  const shows = (el: Element) => visible(el) || [...el.getElementsByTagName("*")].slice(0, 200).some(visible)
   const floats: Element[] = []
   for (const el of [...body.getElementsByTagName("*")].slice(0, 8000)) {
     if (inside(el, blocks) || inside(el, floats) || blocks.some((b) => el.contains(b))) continue
     const s = getComputedStyle(el)
-    if (s.position !== "fixed" || !visible(el) || OVERLAY.test(nameOf(el))) continue
+    if (s.position !== "fixed" || s.display === "none" || s.visibility === "hidden" || !shows(el) || OVERLAY.test(nameOf(el))) continue
     const r = el.getBoundingClientRect()
     if (r.width * r.height > window.innerWidth * vh * 0.4) continue
     floats.push(el)
@@ -872,6 +1048,28 @@ async function prepareInPage({ sheets, maxTriggers, budgetMs }: PrepareArgs) {
   }
   stats.carousels = carousels
 
+  // Script-driven sticky elements become CSS sticky (all scrolling is done by
+  // now, so the site's script won't reset the inline style). Sticky needs no
+  // scrolling container in between, and overflow:clip clips the same way.
+  // The body's overflow only makes it a scroller when <html> has its own;
+  // otherwise it applies to the viewport and must stay as it is.
+  const htmlStyle = getComputedStyle(html)
+  const bodyScrolls = htmlStyle.overflowX !== "visible" || htmlStyle.overflowY !== "visible"
+  const bodyClip = new Set<string>()
+  for (const el of document.querySelectorAll<HTMLElement>("[data-mw-stick]")) {
+    el.style.setProperty("position", "sticky")
+    el.style.setProperty("top", el.getAttribute("data-mw-stick") || "0px")
+    el.removeAttribute("data-mw-stick")
+    for (let p = el.parentElement; p && p !== html; p = p.parentElement) {
+      const s = getComputedStyle(p)
+      for (const axis of ["x", "y"] as const) {
+        if (!/hidden|auto|scroll/.test(axis === "x" ? s.overflowX : s.overflowY)) continue
+        if (p !== body) p.style.setProperty(`overflow-${axis}`, "clip")
+        else if (bodyScrolls) bodyClip.add(`overflow-${axis}:clip!important`)
+      }
+    }
+  }
+
   // CSS ----------------------------------------------------------------------
   const allRoots = [...blocks, ...extras, ...floats]
   const chainSet = new Set<Element>()
@@ -1062,6 +1260,7 @@ async function prepareInPage({ sheets, maxTriggers, budgetMs }: PrepareArgs) {
     if (inline) rules.push(`${selector}{${absCss(inline, location.href)}}`)
   }
   rules.push(...responsiveRules)
+  if (bodyClip.size) rules.push(`body{${[...bodyClip].join(";")}}`)
   const css = rules.join("\n")
   stats.cssRules = rules.length
   const usedData = new Set((css.match(/\[data-[\w-]+/g) ?? []).map((s) => s.slice(1).toLowerCase()))
@@ -1136,6 +1335,37 @@ function serializeInPage({ svgInlineLimit }: { svgInlineLimit: number }) {
     return [...new Set([inUse, largest].filter(Boolean))].map((c) => `${c!.url} ${c!.d}`).join(", ")
   }
 
+  // Background videos (Elementor and most page builders) embed YouTube or
+  // Vimeo with the JS API and start them from script. Without that script the
+  // embed only shows its poster and title, so ask the player to do it.
+  const backgroundEmbed = (el: Element, src: string) => {
+    const background =
+      el.getAttribute("role") === "presentation" ||
+      getComputedStyle(el).pointerEvents === "none" ||
+      !!el.closest('[class*="background-video"],[class*="video-background"],[class*="bg-video"],[class*="video-bg"]')
+    if (!background) return src
+    try {
+      const url = new URL(src)
+      const youtube = url.pathname.match(/^\/embed\/([\w-]{6,})/)
+      if (youtube && /(^|\.)youtube(-nocookie)?\.com$/.test(url.hostname) && url.searchParams.get("enablejsapi") === "1") {
+        const id = youtube[1]
+        const out = new URL(`https://www.youtube.com/embed/${id}`)
+        for (const [k, v] of Object.entries({ autoplay: "1", mute: "1", loop: "1", playlist: id, controls: "0", playsinline: "1", rel: "0", disablekb: "1", iv_load_policy: "3" })) {
+          out.searchParams.set(k, v)
+        }
+        for (const k of ["start", "end"]) if (url.searchParams.get(k)) out.searchParams.set(k, url.searchParams.get(k)!)
+        return out.href
+      }
+      if (url.hostname === "player.vimeo.com" && !url.searchParams.has("background")) {
+        url.searchParams.set("background", "1")
+        return url.href
+      }
+    } catch {
+      // Not a URL: leave it.
+    }
+    return src
+  }
+
   const attrs = (el: Element, extraStyle = "") => {
     const tag = el.localName.toLowerCase()
     let out = ""
@@ -1168,6 +1398,7 @@ function serializeInPage({ svgInlineLimit }: { svgInlineLimit: number }) {
       } else if (lower === "src" || lower === "poster" || lower === "action" || lower === "formaction") {
         if (lower === "src" && lazySrc) value = lazySrc
         if (!value.startsWith("data:")) value = abs(value)
+        if (lower === "src" && tag === "iframe") value = backgroundEmbed(el, value)
       } else if (lower === "srcset" || lower === "data-srcset") {
         if (lower === "data-srcset" && el.hasAttribute("srcset")) continue
         value = trimSrcset(value, (el as HTMLImageElement).currentSrc ?? "")

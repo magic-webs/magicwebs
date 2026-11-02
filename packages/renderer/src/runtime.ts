@@ -18,6 +18,7 @@ type El = typeof globalThis extends { El: { prototype: infer E } } ? E : any
 type Win = typeof globalThis extends { window: infer W } ? W : any
 type Evt = typeof globalThis extends { MouseEvent: { prototype: infer E } } ? E : any
 type Entry = typeof globalThis extends { IntersectionObserverEntry: { prototype: infer E } } ? E : any
+type KeyEvt = typeof globalThis extends { KeyboardEvent: { prototype: infer E } } ? E : any
 
 export function exactRuntime(d: Doc) {
   const w = d.defaultView as Win
@@ -179,6 +180,71 @@ export function exactRuntime(d: Doc) {
     )
     update()
   }
+
+  // Styles scrubbed by the scroll position (GSAP ScrollTrigger, parallax) ---
+  // Keyframes are positions of an ancestor that scrolls with the page ("u"
+  // levels up) and the inline values there; numbers in between are
+  // interpolated when both values have the same shape, e.g. "40%" to "100%".
+  type ScrollFx = { u: number; w: number; y: number[]; p: Record<string, string[]> }
+  const NUMBER = /-?\d*\.?\d+(?:e-?\d+)?/gi
+  function mix(a: string, b: string, t: number): string {
+    const na = a.match(NUMBER) || []
+    const nb = b.match(NUMBER) || []
+    if (na.length !== nb.length || a.replace(NUMBER, "#") !== b.replace(NUMBER, "#")) return t < 0.5 ? a : b
+    let i = 0
+    return a.replace(NUMBER, () => {
+      const value = parseFloat(na[i]) + (parseFloat(nb[i]) - parseFloat(na[i])) * t
+      i++
+      return String(Math.round(value * 1000) / 1000)
+    })
+  }
+  const effects = all("[data-mw-scrollfx]")
+    .map((el) => {
+      const fx = parse<ScrollFx>(el.getAttribute("data-mw-scrollfx"))
+      if (!fx || !Array.isArray(fx.y) || fx.y.length < 2 || !fx.p || typeof fx.p !== "object") return null
+      let anchor: El | null = el
+      for (let i = 0; i < (Number(fx.u) || 1) && anchor && anchor.parentElement; i++) anchor = anchor.parentElement
+      return { el, anchor: anchor || el, fx }
+    })
+    .filter((e): e is { el: El; anchor: El; fx: ScrollFx } => e !== null)
+  if (effects.length) {
+    let queued = false
+    const play = () => {
+      queued = false
+      effects.forEach(({ el, anchor, fx }) => {
+        // Recorded on a desktop window: narrower layouts keep the resting state.
+        if (w.innerWidth < (Number(fx.w) || 0) * 0.7) return
+        const at = -anchor.getBoundingClientRect().top
+        let i = 0
+        while (i < fx.y.length - 2 && at > fx.y[i + 1]) i++
+        const span = fx.y[i + 1] - fx.y[i]
+        const t = Math.max(0, Math.min(1, span > 0 ? (at - fx.y[i]) / span : 1))
+        Object.keys(fx.p).forEach((prop) => {
+          const values = fx.p[prop]
+          if (!/^-{0,2}[a-z][a-z0-9-]*$/i.test(prop) || !Array.isArray(values) || values.length !== fx.y.length) return
+          el.style.setProperty(prop, mix(String(values[i]), String(values[i + 1]), t))
+        })
+      })
+    }
+    const queue = () => {
+      if (!queued) {
+        queued = true
+        w.requestAnimationFrame(play)
+      }
+    }
+    w.addEventListener("scroll", queue, { passive: true })
+    w.addEventListener("resize", queue)
+    play()
+  }
+
+  // Escape closes an open popup through its recorded close button -----------
+  d.addEventListener("keydown", (event: KeyEvt) => {
+    if (event.key !== "Escape") return
+    const close = all('[aria-modal="true"] [data-mw-click],[role="dialog"] [data-mw-click],[class*="popup"] [data-mw-click],[class*="modal"] [data-mw-click]').find(
+      (el) => /close|dismiss/i.test((el.getAttribute("aria-label") || "") + " " + (el.getAttribute("class") || "")) && el.getClientRects().length > 0,
+    )
+    if (close) close.click()
+  })
 
   // Classes the site's script set at narrow widths (e.g. a "mobile" menu) ---
   const responsive = Array.prototype.slice

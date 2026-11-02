@@ -62,32 +62,40 @@ export function Inspector({
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4">
         <div className="flex flex-col gap-3">
           <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Content</h3>
+          {section.type === "html" && (
+            <p className="text-xs text-muted-foreground">
+              An exact copy of the original page, styled by its own CSS with its hover effects and animations. Edit the
+              markup below, or ask the AI chat to change text, images or styles.
+            </p>
+          )}
           {Object.entries(section.props).map(([key, value]) => (
             <ValueField key={key} name={key} path={`props.${key}`} value={value} commit={commit} enums={ENUMS} />
           ))}
         </div>
-        <div className="flex flex-col gap-3">
-          <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Style</h3>
-          {STYLE_FIELDS.map((key) => (
-            <ValueField
-              key={key}
-              name={key}
-              path={`style.${key}`}
-              value={style[key] ?? STYLE_SAMPLES[key]}
-              commit={commit}
-              enums={ENUMS}
+        {section.type !== "html" && (
+          <div className="flex flex-col gap-3">
+            <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Style</h3>
+            {STYLE_FIELDS.map((key) => (
+              <ValueField
+                key={key}
+                name={key}
+                path={`style.${key}`}
+                value={style[key] ?? STYLE_SAMPLES[key]}
+                commit={commit}
+                enums={ENUMS}
+              />
+            ))}
+            <EnumField
+              label="Animation"
+              path="animation"
+              value={section.animation}
+              options={AnimationSchema.options}
+              commit={(_, value) =>
+                apply({ op: "set_section_animation", sectionId: section.id, animation: (value ?? "none") as Section["animation"] & string })
+              }
             />
-          ))}
-          <EnumField
-            label="Animation"
-            path="animation"
-            value={section.animation}
-            options={AnimationSchema.options}
-            commit={(_, value) =>
-              apply({ op: "set_section_animation", sectionId: section.id, animation: (value ?? "none") as Section["animation"] & string })
-            }
-          />
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )

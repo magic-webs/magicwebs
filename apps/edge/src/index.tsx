@@ -29,7 +29,7 @@ const HTML_HEADERS = {
 }
 
 /** Bump when the rendered HTML changes shape, so cached renders are rebuilt. */
-const RENDER_REVISION = 3
+const RENDER_REVISION = 4
 
 /** How often an open page checks for a newer published version. */
 const LIVE_RELOAD_INTERVAL_MS = 4000

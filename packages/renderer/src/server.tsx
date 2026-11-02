@@ -2,8 +2,9 @@ import { renderToReadableStream } from "react-dom/server"
 
 import type { PageDoc } from "@magicwebs/page-schema"
 
-import { ANIMATION_SCRIPT, fontHref, pageCss } from "./css"
-import { PageRenderer, safeSrc } from "./index"
+import { ANIMATION_SCRIPT, fontHref } from "./css"
+import { documentCss, isExact, PageRenderer, rootAttributes, safeSrc } from "./index"
+import { EXACT_RUNTIME_SCRIPT } from "./runtime"
 
 export type RenderOptions = {
   /** Absolute URL of the page, used for canonical and social tags. */
@@ -14,8 +15,9 @@ function Document({ doc, url }: { doc: PageDoc } & RenderOptions) {
   const fonts = fontHref(doc.theme)
   const ogImage = safeSrc(doc.meta.ogImage)
   const favicon = safeSrc(doc.meta.favicon)
+  const exact = isExact(doc)
   return (
-    <html lang={doc.meta.lang ?? "en"}>
+    <html lang={doc.meta.lang ?? "en"} className={doc.styles?.htmlClass || undefined} {...rootAttributes(doc, "html")}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -31,12 +33,13 @@ function Document({ doc, url }: { doc: PageDoc } & RenderOptions) {
         {favicon && <link rel="icon" href={favicon} />}
         {fonts && <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />}
         {fonts && <link rel="stylesheet" href={fonts} />}
-        <style dangerouslySetInnerHTML={{ __html: `html,body{margin:0}${pageCss(doc.theme)}` }} />
+        <style dangerouslySetInnerHTML={{ __html: documentCss(doc) }} />
         <script dangerouslySetInnerHTML={{ __html: `document.documentElement.classList.add("mw-js")` }} />
       </head>
-      <body>
+      <body className={doc.styles?.bodyClass || undefined} {...rootAttributes(doc, "body")}>
         <PageRenderer doc={doc} />
         <script dangerouslySetInnerHTML={{ __html: ANIMATION_SCRIPT }} />
+        {exact && <script dangerouslySetInnerHTML={{ __html: EXACT_RUNTIME_SCRIPT }} />}
       </body>
     </html>
   )

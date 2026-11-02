@@ -206,6 +206,13 @@ export const SectionPropsSchemas = {
   custom: z.object({
     elements: z.array(ElementSchema),
   }),
+  html: z.object({
+    label: z.string().optional().describe("Short name shown in the editor's section list"),
+    html: z
+      .string()
+      .describe("Markup copied from the original page. Styled by the page CSS in styles.css; sanitized when rendered"),
+    css: z.string().optional().describe("Extra CSS for this section only"),
+  }),
 } as const
 
 export type SectionType = keyof typeof SectionPropsSchemas
@@ -236,6 +243,7 @@ export const SectionSchema = z.discriminatedUnion("type", [
   sectionVariant("cta"),
   sectionVariant("footer"),
   sectionVariant("custom"),
+  sectionVariant("html"),
 ])
 
 export const MetaSchema = z.object({
@@ -246,10 +254,22 @@ export const MetaSchema = z.object({
   lang: z.string().optional(),
 })
 
+// Exact clones keep the original site's stylesheet and the classes and
+// attributes its selectors expect on <html> and <body>.
+export const PageStylesSchema = z.object({
+  css: z.string().describe("The original page's CSS, pruned to what its markup uses"),
+  htmlClass: z.string().optional(),
+  htmlAttributes: z.record(z.string(), z.string()).optional().describe("data-* attributes on <html>, e.g. data-theme"),
+  bodyClass: z.string().optional(),
+  bodyAttributes: z.record(z.string(), z.string()).optional().describe("data-* attributes on <body>"),
+  defs: z.string().optional().describe("Hidden SVG symbols and gradients the markup references by id"),
+})
+
 export const PageDocSchema = z.object({
   schemaVersion: z.literal(1),
   meta: MetaSchema,
   theme: ThemeSchema,
+  styles: PageStylesSchema.optional(),
   sections: z.array(SectionSchema),
 })
 
@@ -262,6 +282,7 @@ export type Element = z.infer<typeof ElementSchema>
 export type Section = z.infer<typeof SectionSchema>
 export type SectionOf<T extends SectionType> = Extract<Section, { type: T }>
 export type PageMeta = z.infer<typeof MetaSchema>
+export type PageStyles = z.infer<typeof PageStylesSchema>
 export type PageDoc = z.infer<typeof PageDocSchema>
 
 export const DEFAULT_THEME: Theme = {

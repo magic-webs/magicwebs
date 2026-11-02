@@ -4,17 +4,23 @@ import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import type { PageDoc } from "@magicwebs/page-schema"
-import { fontHref, pageCss, PageRenderer } from "@magicwebs/renderer"
+import { documentCss, fontHref, PageRenderer, rootAttributes, syncMediaClasses } from "@magicwebs/renderer"
 
 export type Device = "desktop" | "tablet" | "mobile"
 
 const WIDTHS: Record<Device, string> = { desktop: "100%", tablet: "820px", mobile: "390px" }
 
+// Html sections are `display: contents`, so they have no box of their own;
+// their visible children carry the outline instead.
 const EDITOR_CSS = `
-html,body{margin:0}
 [data-section-id]{cursor:pointer}
-[data-section-id]:hover{outline:2px dashed #6366f1;outline-offset:-2px}
+[data-section-id]:not(.mw-html):hover,.mw-html[data-section-id]:hover>:not([data-mw-off]){outline:2px dashed #6366f1;outline-offset:-2px}
 `
+
+function boxOf(el: Element | null): Element | null {
+  if (!el?.classList.contains("mw-html")) return el
+  return [...el.children].find((c) => !c.hasAttribute("data-mw-off") && c.getBoundingClientRect().height > 0) ?? null
+}
 
 /**
  * Renders the draft inside an iframe so the page's CSS is isolated from the
@@ -60,14 +66,41 @@ export function PreviewFrame({
 
   const fonts = fontHref(doc.theme)
   const selectedCss = selectedId
-    ? `[data-section-id="${CSS.escape(selectedId)}"]{outline:2px solid #6366f1!important;outline-offset:-2px}`
+    ? `[data-section-id="${CSS.escape(selectedId)}"]:not(.mw-html),.mw-html[data-section-id="${CSS.escape(selectedId)}"]>:not([data-mw-off]){outline:2px solid #6366f1!important;outline-offset:-2px}`
     : ""
+
+  // Exact clones expect the original classes and data attributes on <html>
+  // and <body>, and switch some classes by width (the runtime does that on
+  // published pages).
+  const styles = doc.styles
+  useEffect(() => {
+    if (!body) return
+    const root = body.ownerDocument.documentElement
+    const apply = (el: HTMLElement, className: string | undefined, attributes: Record<string, string>) => {
+      el.className = className ?? ""
+      for (const a of [...el.attributes]) if (a.name.startsWith("data-")) el.removeAttribute(a.name)
+      for (const [name, value] of Object.entries(attributes)) el.setAttribute(name, value)
+    }
+    apply(root, styles?.htmlClass, rootAttributes(doc, "html"))
+    apply(body, styles?.bodyClass, rootAttributes(doc, "body"))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [body, styles?.htmlClass, styles?.bodyClass, JSON.stringify(styles?.htmlAttributes), JSON.stringify(styles?.bodyAttributes)])
+
+  useEffect(() => {
+    if (!body) return
+    const frameWindow = body.ownerDocument.defaultView
+    const sync = () => syncMediaClasses(body.ownerDocument)
+    sync()
+    frameWindow?.addEventListener("resize", sync)
+    return () => frameWindow?.removeEventListener("resize", sync)
+  }, [body, doc, device])
 
   useEffect(() => {
     if (!body || !selectedId) return
-    body.ownerDocument
-      .querySelector(`[data-section-id="${CSS.escape(selectedId)}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    boxOf(body.ownerDocument.querySelector(`[data-section-id="${CSS.escape(selectedId)}"]`))?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    })
   }, [body, selectedId])
 
   return (
@@ -83,7 +116,7 @@ export function PreviewFrame({
         createPortal(
           <>
             {fonts && <link rel="stylesheet" href={fonts} />}
-            <style>{pageCss(doc.theme) + EDITOR_CSS + selectedCss}</style>
+            <style>{documentCss(doc) + EDITOR_CSS + selectedCss}</style>
             <PageRenderer doc={doc} />
           </>,
           body,

@@ -1,10 +1,10 @@
 import { ConvexError, v } from "convex/values"
 import { z } from "zod"
 
-import { applyOps as applyPageOps, OpError, OpSchema, outline, type PageDoc } from "@magicwebs/page-schema"
+import { applyOps as applyPageOps, OpError, OpSchema, outline } from "@magicwebs/page-schema"
 
 import { mutation, query } from "./_generated/server"
-import { getDraft, toStored } from "./lib"
+import { getDraft, loadDoc, storeDoc } from "./lib"
 import { scheduleAutoPublish } from "./versions"
 
 /** The live draft. Editors subscribe to this, so every edit shows up instantly. */
@@ -16,13 +16,13 @@ export const get = query({
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .unique()
     if (!draft) return null
-    return { doc: draft.doc as PageDoc, revision: draft.revision, updatedAt: draft.updatedAt }
+    return { doc: await loadDoc(ctx, draft.doc), revision: draft.revision, updatedAt: draft.updatedAt }
   },
 })
 
 export const outlineOf = query({
   args: { projectId: v.id("projects") },
-  handler: async (ctx, { projectId }) => outline((await getDraft(ctx, projectId)).doc as PageDoc),
+  handler: async (ctx, { projectId }) => outline(await loadDoc(ctx, (await getDraft(ctx, projectId)).doc)),
 })
 
 export const recentEdits = query({
@@ -55,7 +55,7 @@ export const applyOps = mutation({
 
     let next
     try {
-      next = applyPageOps(draft.doc as PageDoc, parsed.data as never)
+      next = applyPageOps(await loadDoc(ctx, draft.doc), parsed.data as never)
     } catch (error) {
       if (error instanceof OpError) throw new ConvexError(error.message)
       throw error
@@ -63,7 +63,7 @@ export const applyOps = mutation({
 
     const revision = draft.revision + 1
     const now = Date.now()
-    await ctx.db.patch(draft._id, { doc: toStored(next.doc), revision, updatedAt: now })
+    await ctx.db.patch(draft._id, { doc: await storeDoc(ctx, next.doc), revision, updatedAt: now })
     await ctx.db.insert("edits", {
       projectId: args.projectId,
       revision,

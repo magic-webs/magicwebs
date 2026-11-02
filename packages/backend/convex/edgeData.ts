@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 
 import { internalQuery } from "./_generated/server"
+import { loadDoc } from "./lib"
 
 export const publishedSite = internalQuery({
   args: { projectId: v.id("projects") },
@@ -16,7 +17,7 @@ export const publishedSite = internalQuery({
     return {
       version: version.number,
       publishedAt: project.publishedAt ?? version.createdAt,
-      doc: version.doc,
+      doc: await loadDoc(ctx, version.doc),
       hostnames: domains.filter((d) => d.status === "active").map((d) => d.hostname),
     }
   },
@@ -51,6 +52,6 @@ export const versionDoc = internalQuery({
       .query("versions")
       .withIndex("by_project", (q) => q.eq("projectId", projectId).eq("number", version))
       .unique()
-    return found?.doc ?? null
+    return found ? loadDoc(ctx, found.doc) : null
   },
 })

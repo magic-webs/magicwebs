@@ -5,7 +5,7 @@ import { PageDocSchema } from "@magicwebs/page-schema"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server"
-import { getDraft } from "./lib"
+import { getDraft, loadDoc } from "./lib"
 
 /** How long after the last edit the draft is published automatically. */
 const AUTO_PUBLISH_DELAY_MS = 1000
@@ -24,7 +24,10 @@ export const list = query({
 
 export const get = query({
   args: { versionId: v.id("versions") },
-  handler: async (ctx, { versionId }) => ctx.db.get(versionId),
+  handler: async (ctx, { versionId }) => {
+    const version = await ctx.db.get(versionId)
+    return version && { ...version, doc: await loadDoc(ctx, version.doc) }
+  },
 })
 
 /** Snapshot the current draft as a new immutable version and make it live. */
@@ -32,7 +35,7 @@ async function publishDraft(ctx: MutationCtx, projectId: Id<"projects">, note?: 
   const project = await ctx.db.get(projectId)
   if (!project) throw new ConvexError("Project not found")
   const draft = await getDraft(ctx, projectId)
-  if (!PageDocSchema.safeParse(draft.doc).success) {
+  if (!PageDocSchema.safeParse(await loadDoc(ctx, draft.doc)).success) {
     throw new ConvexError("The draft is not a valid page and can't be published")
   }
   if (project.autoPublishId) await ctx.scheduler.cancel(project.autoPublishId)
@@ -72,7 +75,7 @@ export const autoPublish = internalMutation({
   handler: async (ctx, { projectId }) => {
     const draft = await getDraft(ctx, projectId)
     // An invalid draft stays unpublished; the editor still shows it as unpublished.
-    if (!PageDocSchema.safeParse(draft.doc).success) return
+    if (!PageDocSchema.safeParse(await loadDoc(ctx, draft.doc)).success) return
     await publishDraft(ctx, projectId, "Auto-published")
   },
 })

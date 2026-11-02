@@ -65,6 +65,28 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
       return { theme: doc.theme, meta: doc.meta }
     },
   },
+  search_page_css: {
+    description:
+      "Find rules in the page stylesheet of an exact clone (html sections) whose selector or declarations contain the query, e.g. a class name from get_section or a color. Use before edit_page_css.",
+    input: z.object({ query: z.string() }),
+    run: async (projectId, { query }) => {
+      const css = (await loadDoc(projectId)).styles?.css ?? ""
+      const needle = String(query).toLowerCase()
+      // Top-level rules, keeping @media blocks whole so edits can copy them exactly.
+      const rules: string[] = []
+      let depth = 0
+      let start = 0
+      for (let i = 0; i < css.length; i++) {
+        if (css[i] === "{") depth++
+        else if (css[i] === "}" && --depth === 0) {
+          rules.push(css.slice(start, i + 1).trim())
+          start = i + 1
+        }
+      }
+      const matches = rules.filter((r) => r.toLowerCase().includes(needle))
+      return { total: matches.length, rules: matches.slice(0, 40).map((r) => (r.length > 1500 ? r.slice(0, 1500) + "…" : r)) }
+    },
+  },
   apply_operations: {
     description:
       "Apply several edit operations atomically in one step (all succeed or none do). Each item is an object with an `op` field naming one of the edit tools plus that tool's arguments.",

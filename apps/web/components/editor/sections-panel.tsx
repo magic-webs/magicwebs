@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils"
 
 function sectionLabel(props: Record<string, unknown>): string {
-  const label = props.heading ?? props.brand ?? props.title ?? props.copyright
+  const label = props.heading ?? props.brand ?? props.title ?? props.label ?? props.copyright
   return typeof label === "string" ? label : ""
 }
 

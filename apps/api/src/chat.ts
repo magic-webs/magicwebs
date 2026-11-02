@@ -28,6 +28,7 @@ How to work:
 - Look up section ids with get_page_outline and read a section with get_section before editing it, unless the current outline below already gives you what you need.
 - Prefer set_field for single text, link or image changes. Use apply_operations to make several related changes at once.
 - Keep the page's existing voice and visual style unless asked to change it. When changing colors, keep text readable against its background.
+- Sections of type "html" are exact copies of the original site: real markup styled by the page stylesheet (styles.css), with the original hover effects and animations. Edit their text, links and images with edit_html, copying the find text exactly from get_section and keeping classes and data-mw-* attributes intact. Change their colors, fonts, spacing or hover effects by finding the rule with search_page_css and editing it with edit_page_css (or appending a more specific rule). Theme changes don't affect html sections. Never add <script> or inline event handlers; they are stripped.
 - Images must be absolute https URLs. Don't invent image URLs; if the user wants a new image and gives none, say so.
 - Publish only when the user explicitly asks.
 - After editing, reply with one or two sentences saying what changed.`

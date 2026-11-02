@@ -64,6 +64,13 @@ export default defineSchema({
     .index("by_status", ["status", "createdAt"])
     .index("by_project", ["projectId"]),
 
+  /** Long strings of stored pages (exact clones' markup and CSS), see lib.ts. */
+  blobs: defineTable({
+    hash: v.string(),
+    index: v.number(),
+    data: v.string(),
+  }).index("by_hash", ["hash", "index"]),
+
   domains: defineTable({
     projectId: v.id("projects"),
     hostname: v.string(),

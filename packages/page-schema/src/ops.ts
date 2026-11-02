@@ -40,6 +40,7 @@ export const NewSectionSchema = z.discriminatedUnion("type", [
   newSectionVariant("cta"),
   newSectionVariant("footer"),
   newSectionVariant("custom"),
+  newSectionVariant("html"),
 ])
 export type NewSection = z.infer<typeof NewSectionSchema>
 
@@ -109,6 +110,21 @@ export const OP_DEFINITIONS = {
   update_meta: {
     description: "Change SEO metadata: title, description, favicon, social image, language.",
     input: MetaSchema.partial(),
+  },
+  edit_html: {
+    description:
+      "Edit the markup of an html section (an exact copy of the original page) by replacing an exact snippet of its props.html. Copy `find` verbatim from get_section; it must match exactly once unless replaceAll is true. Keep the existing classes so the page CSS still styles it.",
+    input: z.object({
+      sectionId: z.string(),
+      find: z.string(),
+      replace: z.string(),
+      replaceAll: z.boolean().optional(),
+    }),
+  },
+  edit_page_css: {
+    description:
+      "Edit the page stylesheet of an exact clone (styles.css). With `find`, replace that exact snippet (it must match once); without it, append `replace` as new rules. Use for colors, fonts, spacing, hover effects and animations of html sections.",
+    input: z.object({ find: z.string().optional(), replace: z.string() }),
   },
 } as const
 
@@ -241,7 +257,30 @@ function applyOne(doc: PageDoc, op: Op): string {
       doc.meta = { ...doc.meta, ...meta }
       return "Updated page metadata"
     }
+    case "edit_html": {
+      const section = doc.sections[findIndex(doc, op.sectionId)]
+      if (section.type !== "html") throw new OpError(`Section "${op.sectionId}" is a ${section.type} section, not html`)
+      section.props.html = replaceSnippet(section.props.html, op.find, op.replace, op.replaceAll, `section ${op.sectionId}`)
+      return `Edited the markup of ${op.sectionId}`
+    }
+    case "edit_page_css": {
+      const css = doc.styles?.css ?? ""
+      const next = op.find ? replaceSnippet(css, op.find, op.replace, false, "the page CSS") : `${css}
+${op.replace}`
+      doc.styles = { ...doc.styles, css: next }
+      return op.find ? "Edited the page CSS" : "Added rules to the page CSS"
+    }
   }
+}
+
+function replaceSnippet(text: string, find: string, replace: string, all: boolean | undefined, where: string): string {
+  if (!find) throw new OpError("`find` can't be empty")
+  const count = text.split(find).length - 1
+  if (count === 0) throw new OpError(`The snippet to replace was not found in ${where}; copy it exactly from the current content`)
+  if (count > 1 && !all) {
+    throw new OpError(`The snippet appears ${count} times in ${where}; include more surrounding text or set replaceAll`)
+  }
+  return all ? text.split(find).join(replace) : text.replace(find, () => replace)
 }
 
 /**
@@ -264,7 +303,7 @@ export function outline(doc: PageDoc): string {
   return doc.sections
     .map((s, i) => {
       const props = s.props as Record<string, unknown>
-      const label = props.heading ?? props.brand ?? props.title ?? ""
+      const label = props.heading ?? props.brand ?? props.title ?? props.label ?? ""
       return `${i}. [${s.id}] ${s.type}${s.hidden ? " (hidden)" : ""}${label ? ` — ${String(label).slice(0, 60)}` : ""}`
     })
     .join("\n")

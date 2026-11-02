@@ -12,7 +12,9 @@ import { Textarea } from "@/components/ui/textarea"
 
 export type Commit = (path: string, value: unknown) => void
 
-const LONG_TEXT = new Set(["body", "subheading", "quote", "answer", "description", "tagline", "text"])
+const LONG_TEXT = new Set(["body", "subheading", "quote", "answer", "description", "tagline", "text", "html", "css"])
+/** Markup and CSS of exact-clone sections get a code-sized editor. */
+const CODE = /^props\.(html|css)$/
 
 function humanize(key: string) {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())
@@ -45,7 +47,14 @@ function TextField({ label, path, value, commit, long }: { label: string; path: 
     <label className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground">{label}</span>
       {long ? (
-        <Textarea value={local} onFocus={onFocus} onChange={(e) => setLocal(e.target.value)} onBlur={save} className="min-h-16" />
+        <Textarea
+          value={local}
+          onFocus={onFocus}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={save}
+          spellCheck={!CODE.test(path)}
+          className={CODE.test(path) ? "min-h-80 font-mono text-xs" : "min-h-16"}
+        />
       ) : (
         <div className="flex items-center gap-2">
           {isColor && <span className="size-5 shrink-0 rounded border" style={{ background: local }} />}

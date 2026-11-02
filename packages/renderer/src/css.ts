@@ -19,15 +19,22 @@ export function fontHref(theme: Theme): string | null {
   return `https://fonts.googleapis.com/css2?${query}&display=swap`
 }
 
+// Base rules only reach the typed sections, so html sections (exact copies of
+// the original markup) are styled by the original CSS alone.
+const T = ":where(.mw-section,.mw-nav,.mw-footer)"
+
 export function pageCss(theme: Theme): string {
   const c = theme.colors
   return `
 .mw-root{--mw-bg:${cssValue(c.background)};--mw-fg:${cssValue(c.foreground)};--mw-primary:${cssValue(c.primary)};--mw-primary-fg:${cssValue(c.primaryForeground)};--mw-muted:${cssValue(c.muted)};--mw-muted-fg:${cssValue(c.mutedForeground)};--mw-accent:${cssValue(c.accent)};--mw-highlight:${cssValue(c.highlight || c.accent)};--mw-border:${cssValue(c.border)};--mw-radius:${Number(theme.radius) || 0}px;--mw-max:${Number(theme.maxWidth) || 1200}px;--mw-font-heading:${cssFamily(theme.fonts.heading)},system-ui,sans-serif;--mw-font-body:${cssFamily(theme.fonts.body)},system-ui,sans-serif;background:var(--mw-bg);color:var(--mw-fg);font-family:var(--mw-font-body);line-height:1.6;-webkit-font-smoothing:antialiased}
-.mw-root *,.mw-root *::before,.mw-root *::after{box-sizing:border-box}
-.mw-root img{max-width:100%;height:auto;display:block}
-.mw-root a{color:inherit}
-.mw-root h1,.mw-root h2,.mw-root h3,.mw-root h4{font-family:var(--mw-font-heading);line-height:1.15;margin:0;letter-spacing:-0.02em}
-.mw-root p{margin:0}
+.mw-root ${T},.mw-root ${T} *,.mw-root ${T} *::before,.mw-root ${T} *::after{box-sizing:border-box}
+.mw-root ${T} img{max-width:100%;height:auto;display:block}
+.mw-root ${T} a{color:inherit}
+.mw-root ${T} :is(h1,h2,h3,h4){font-family:var(--mw-font-heading);line-height:1.15;margin:0;letter-spacing:-0.02em}
+.mw-root ${T} p{margin:0}
+.mw-root.mw-exact{display:contents;background:none;color:inherit;font-family:inherit;line-height:inherit;-webkit-font-smoothing:inherit}
+.mw-exact ${T}{color:var(--mw-fg);font-family:var(--mw-font-body);line-height:1.6;-webkit-font-smoothing:antialiased}
+.mw-html{display:contents}
 .mw-section{position:relative;padding:var(--mw-py,96px) 24px;background-size:cover;background-position:center}
 .mw-section[data-align=center]{text-align:center}
 .mw-section[data-align=right]{text-align:right}
@@ -134,3 +141,21 @@ export function pageCss(theme: Theme): string {
 
 /** Client script for entrance animations on published pages. */
 export const ANIMATION_SCRIPT = `(function(){var r=document.documentElement;r.classList.add("mw-js");if(!("IntersectionObserver"in window)){r.classList.remove("mw-js");return}var o=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("mw-in");o.unobserve(e.target)}})},{threshold:0.12});document.querySelectorAll("[data-animate]").forEach(function(el){o.observe(el)})})();`
+
+/**
+ * Rules exact clones need on top of the original CSS: hidden interaction
+ * states, scroll reveals, AOS / WOW entrance animations and carousels turned
+ * into native scroll-snap strips.
+ */
+export const EXACT_CSS = `
+[data-mw-off]{display:none!important}
+.mw-js [data-mw-reveal]:not(.mw-in){opacity:var(--mw-o,0)!important;transform:var(--mw-t,none)!important;transition:none!important}
+.mw-js [data-mw-reveal].mw-in:not(.mw-done){transition:opacity .9s cubic-bezier(.16,1,.3,1) var(--mw-d,0s),transform .9s cubic-bezier(.16,1,.3,1) var(--mw-d,0s)!important}
+html:not(.mw-js) [data-aos]{opacity:1!important;transform:none!important;visibility:visible!important}
+.mw-js [data-mw-wow]:not(.mw-in){visibility:hidden}
+[data-mw-carousel]{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:none;transform:none!important;width:auto!important;height:auto!important}
+[data-mw-carousel]::-webkit-scrollbar{display:none}
+[data-mw-carousel]>*{flex:0 0 var(--mw-slide,100%)!important;width:auto!important;max-width:none!important;scroll-snap-align:start;transform:none!important;opacity:1!important;visibility:visible!important;position:relative!important;left:auto!important;top:auto!important}
+@media (max-width:767px){[data-mw-carousel]>*{flex-basis:var(--mw-slide-m,100%)!important}}
+@media (prefers-reduced-motion:reduce){.mw-js [data-mw-reveal]{opacity:1!important;transform:none!important;transition:none!important}}
+`

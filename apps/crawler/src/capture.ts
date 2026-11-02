@@ -19,7 +19,7 @@ const MAX_SLICES = 6
 
 let browser: Browser | null = null
 
-async function getBrowser() {
+export async function getBrowser() {
   if (!browser?.isConnected()) {
     browser = await chromium.launch({ args: ["--disable-dev-shm-usage"] })
   }
@@ -50,16 +50,14 @@ async function settle(page: Page) {
   })
 }
 
+export const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36 MagicwebsCloner/1.0"
+
 export async function capture(url: string): Promise<Capture> {
   if (!(await isPublicUrl(url))) throw new Error("That URL points to a private or unreachable address")
 
   const b = await getBrowser()
-  const context = await b.newContext({
-    viewport: DESKTOP,
-    deviceScaleFactor: 1,
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36 MagicwebsCloner/1.0",
-  })
+  const context = await b.newContext({ viewport: DESKTOP, deviceScaleFactor: 1, userAgent: USER_AGENT })
   try {
     const page = await context.newPage()
     await guard(page)
@@ -99,7 +97,7 @@ export async function capture(url: string): Promise<Capture> {
  * Runs inside the page. Splits the page into full-width visual blocks and
  * records the computed styles that matter for rebuilding them.
  */
-function extractInPage() {
+export function extractInPage() {
   const vw = window.innerWidth
   const abs = (u: string | null | undefined) => {
     if (!u) return undefined

@@ -21,7 +21,13 @@ packages/
 - **One page document per project** (`packages/page-schema`) is the single source of truth: meta, theme tokens, and an ordered list of typed sections (`navbar`, `hero`, `features`, `pricing`, …, plus a free-form `custom` section for anything the registry can't express).
 - **All edits are operations** (`set_field`, `add_section`, `update_theme`, …). The visual editor, the AI chat and MCP clients all send the same operations to one Convex mutation, which validates them and saves the draft atomically.
 - **Instant editing**: the editor subscribes to the draft with a Convex reactive query and renders it in an iframe through a portal, so changes appear immediately with no build or deploy.
-- **Cloning**: creating a project queues a job. A crawler worker claims it, captures screenshots and computed styles with Playwright, extracts metadata with Cheerio, has Claude Haiku 5.5 (via Vercel AI Gateway) rebuild the page as a schema-valid document, copies images to R2, and writes the draft.
+- **Cloning** makes an exact copy. Creating a project queues a job, and a crawler worker (`apps/crawler/src/exact.ts`) opens the page in Playwright and:
+  - splits it into blocks, each stored as an `html` section holding its real markup inside copies of its ancestors, with hidden placeholders for their other children so `body >`, `:nth-child` and sibling selectors still match;
+  - keeps the original CSS, pruned to the rules the markup uses (`:hover`, `@keyframes`, media queries, fonts), with `http:` assets upgraded to `https:`;
+  - records what the site's JavaScript did, and the renderer's runtime (`packages/renderer/src/runtime.ts`) replays it without that JavaScript: scroll reveals and count-ups, AOS / WOW / animate.css entrances, header classes on scroll, clicks on menus, accordions and tabs (including closing them), markup and classes that change at phone widths, and carousels as scroll-snap strips with working arrows;
+  - copies images and fonts to R2. The R2 bucket needs CORS that allows the sites' origins, or browsers won't load the fonts.
+
+  Pages too big to copy (over 4 MB) are rebuilt by the AI model chosen at creation instead. Exact markup is sanitized every time it is rendered (`packages/page-schema/src/sanitize.ts`), and long strings are stored in the `blobs` table rather than inside the draft, so pages can exceed Convex's 1 MiB document limit.
 - **Publishing** snapshots the draft as an immutable version and writes it to Workers KV. The single edge Worker maps the hostname to a project, server-renders the published JSON with the shared renderer, and caches the HTML per version. Rolling back points the site at an earlier version.
 - **Custom domains** use Cloudflare for SaaS: Convex creates the custom hostname, shows the DNS records to add, and routes the hostname once Cloudflare reports it active.
 

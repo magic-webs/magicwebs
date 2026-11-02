@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react"
 
-import type { Element, Image, Link, Section, SectionOf, SectionType } from "@magicwebs/page-schema"
+import { sanitizeCss, sanitizeHtml, type Element, type Image, type Link, type Section, type SectionOf, type SectionType } from "@magicwebs/page-schema"
 
 import { cssValue } from "./css"
 
@@ -559,6 +559,38 @@ function Custom({ section }: { section: SectionOf<"custom"> }) {
   )
 }
 
+// The editor re-renders on every draft change; markup of untouched sections is
+// identical, so remember recent sanitizer results.
+const sanitized = new Map<string, string>()
+
+export function cleanHtml(html: string): string {
+  let clean = sanitized.get(html)
+  if (clean === undefined) {
+    clean = sanitizeHtml(html)
+    if (sanitized.size > 300) sanitized.delete(sanitized.keys().next().value as string)
+    sanitized.set(html, clean)
+  }
+  return clean
+}
+
+/**
+ * An exact copy of a block of the original page. The wrapper is
+ * `display: contents`, so the original markup lays out as if it were still a
+ * direct child of <body>.
+ */
+function Html({ section }: { section: SectionOf<"html"> }) {
+  const p = section.props
+  const css = p.css ? `<style>${sanitizeCss(p.css)}</style>` : ""
+  return (
+    <div
+      className="mw-html"
+      data-section-id={section.id}
+      data-section-type="html"
+      dangerouslySetInnerHTML={{ __html: css + cleanHtml(p.html) }}
+    />
+  )
+}
+
 type Registry = { [T in SectionType]: (props: { section: SectionOf<T> }) => ReactNode }
 
 /** Maps every section type in the schema to the component that renders it. */
@@ -576,4 +608,5 @@ export const SECTION_COMPONENTS: Registry = {
   cta: Cta,
   footer: Footer,
   custom: Custom,
+  html: Html,
 }

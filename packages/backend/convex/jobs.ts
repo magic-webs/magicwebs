@@ -4,7 +4,7 @@ import { z } from "zod"
 import { PageDocSchema } from "@magicwebs/page-schema"
 
 import { mutation, query } from "./_generated/server"
-import { assertWorker, getDraft, toStored } from "./lib"
+import { assertWorker, getDraft, storeDoc } from "./lib"
 import { aiUsage } from "./models"
 
 // Crawl jobs are pulled by the Playwright workers on the VPS. Every mutation
@@ -79,7 +79,7 @@ export const complete = mutation({
 
     const draft = await getDraft(ctx, job.projectId)
     const now = Date.now()
-    await ctx.db.patch(draft._id, { doc: toStored(parsed.data), revision: draft.revision + 1, updatedAt: now })
+    await ctx.db.patch(draft._id, { doc: await storeDoc(ctx, parsed.data), revision: draft.revision + 1, updatedAt: now })
     await ctx.db.insert("edits", {
       projectId: job.projectId,
       revision: draft.revision + 1,

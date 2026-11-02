@@ -26,6 +26,7 @@ Reproduce the original as faithfully as the registry allows:
 - Use the mobile screenshot to choose layouts that collapse the same way, including mobileColumns (1 or 2) for features and galleries.
 - Prefer typed sections over "custom": typed sections are responsive, custom ones often are not. If you do use custom, give fixed widths and multi-column layouts a mobileStyle.
 - Where blocks animate into view, set animation to "fade-up" (or the closest match).
+- Never use the "html" section type or the top-level "styles" field; they are for exact copies made without AI.
 - Section ids: short unique strings like "s_hero".
 - Keep link hrefs as absolute URLs from the extracted data, or "#" when unknown.
 

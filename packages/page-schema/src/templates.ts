@@ -111,4 +111,11 @@ export const SECTION_TEMPLATES: { [T in SectionType]: Extract<NewSection, { type
     type: "custom",
     props: { elements: [{ tag: "h2", text: "Custom section", style: { textAlign: "center" } }] },
   },
+  html: {
+    type: "html",
+    props: {
+      label: "HTML section",
+      html: '<section style="padding:80px 24px;text-align:center"><h2>New section</h2><p>Edit this markup in the inspector or ask the AI.</p></section>',
+    },
+  },
 }

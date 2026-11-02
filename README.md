@@ -35,6 +35,8 @@ cp apps/api/.env.example apps/api/.env          # fill in CONVEX_URL, AI_GATEWAY
 cp apps/crawler/.env.example apps/crawler/.env  # fill in CONVEX_URL, WORKER_SECRET, AI_GATEWAY_API_KEY
 npx convex env set WORKER_SECRET <same-secret>  # run inside packages/backend
 
+bun run dev           # all of the below at once (or e.g. `bun run dev web api`)
+
 bun run dev:backend   # Convex: pushes functions, regenerates types
 bun run dev:web       # http://localhost:3000
 bun run dev:api       # http://localhost:8787

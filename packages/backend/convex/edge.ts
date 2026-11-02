@@ -31,3 +31,12 @@ export const routeHost = internalAction({
     else await kvDelete(`host:${hostname}`)
   },
 })
+
+/** Stop serving a deleted project: drop its published page and hostname routes. */
+export const removeSite = internalAction({
+  args: { projectId: v.id("projects"), hostnames: v.array(v.string()) },
+  handler: async (_ctx, { projectId, hostnames }) => {
+    await kvDelete(`site:${projectId}`)
+    for (const hostname of hostnames) await kvDelete(`host:${hostname}`)
+  },
+})

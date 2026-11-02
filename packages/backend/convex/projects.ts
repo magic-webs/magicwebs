@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values"
 
 import { emptyPageDoc } from "@magicwebs/page-schema"
 
+import { internal } from "./_generated/api"
 import { mutation, query } from "./_generated/server"
 import { sitesRootDomain, slugify } from "./lib"
 import { aiEffort, aiModel } from "./models"
@@ -100,5 +101,45 @@ export const rename = mutation({
   handler: async (ctx, { projectId, name }) => {
     if (!name.trim()) throw new ConvexError("Name can't be empty")
     await ctx.db.patch(projectId, { name: name.trim() })
+  },
+})
+
+/**
+ * Delete a project with its draft, history and domains, and take its site off
+ * the edge. Stored page blobs are content-addressed and may be shared, so they stay.
+ */
+export const remove = mutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const project = await ctx.db.get(projectId)
+    if (!project) return
+    if (project.autoPublishId) await ctx.scheduler.cancel(project.autoPublishId)
+
+    const domains = await ctx.db
+      .query("domains")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect()
+    for (const domain of domains) {
+      await ctx.db.delete(domain._id)
+      if (domain.kind === "custom") {
+        await ctx.scheduler.runAfter(0, internal.domains.deprovision, {
+          hostname: domain.hostname,
+          cloudflareId: domain.cloudflareId,
+        })
+      }
+    }
+    await ctx.scheduler.runAfter(0, internal.edge.removeSite, {
+      projectId,
+      hostnames: domains.filter((d) => d.kind === "subdomain").map((d) => d.hostname),
+    })
+
+    for (const table of ["drafts", "edits", "versions", "jobs"] as const) {
+      const rows = await ctx.db
+        .query(table)
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect()
+      for (const row of rows) await ctx.db.delete(row._id)
+    }
+    await ctx.db.delete(projectId)
   },
 })

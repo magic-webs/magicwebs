@@ -13,9 +13,9 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 
-type DnsRecord = { type: string; name: string; value: string }
+export type DnsRecord = { type: string; name: string; value: string }
 
-function dnsRecords(domain: Doc<"domains">): DnsRecord[] {
+export function dnsRecords(domain: Doc<"domains">): DnsRecord[] {
   const v = domain.verification as
     | { cname?: { name: string; value: string }; ownership?: { name: string; value: string }; ssl?: { name: string; value: string } }
     | undefined

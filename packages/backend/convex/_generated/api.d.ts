@@ -9,6 +9,7 @@
  */
 
 import type * as cloudflare from "../cloudflare.js";
+import type * as dashboard from "../dashboard.js";
 import type * as domains from "../domains.js";
 import type * as drafts from "../drafts.js";
 import type * as edge from "../edge.js";
@@ -29,6 +30,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   cloudflare: typeof cloudflare;
+  dashboard: typeof dashboard;
   domains: typeof domains;
   drafts: typeof drafts;
   edge: typeof edge;

@@ -53,7 +53,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
       <div className="grid h-svh place-items-center text-sm text-muted-foreground">
         <div className="flex flex-col items-center gap-3">
           Project not found.
-          <Link href="/" className="underline">
+          <Link href="/dashboard" className="underline">
             Back to projects
           </Link>
         </div>
@@ -80,7 +80,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
   return (
     <div className="flex h-svh flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 sm:px-3">
-        <Button size="icon-sm" variant="ghost" render={<Link href="/" />} aria-label="Back to projects">
+        <Button size="icon-sm" variant="ghost" nativeButton={false} render={<Link href="/dashboard" />} aria-label="Back to projects">
           <ArrowLeft />
         </Button>
         <span className="truncate text-sm font-medium">{project.name}</span>
@@ -113,6 +113,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
             <Button
               size="sm"
               variant="ghost"
+              nativeButton={false}
               render={<a href={`https://${project.hostname}`} target="_blank" rel="noreferrer" />}
             >
               <ExternalLink />

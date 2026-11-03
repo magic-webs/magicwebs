@@ -7,7 +7,7 @@ function required(name: string): string {
 export const env = {
   convexUrl: required("CONVEX_URL"),
   workerSecret: required("WORKER_SECRET"),
-  workerId: process.env.WORKER_ID ?? `crawler-${crypto.randomUUID().slice(0, 8)}`,
+  workerId: process.env.WORKER_ID || `crawler-${crypto.randomUUID().slice(0, 8)}`,
   pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 3000),
   /** Vercel AI Gateway model id. Authenticated with AI_GATEWAY_API_KEY. */
   model: process.env.AI_MODEL ?? "anthropic/claude-haiku-5.5",

@@ -151,7 +151,11 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
               <TabsTrigger value="theme">Theme</TabsTrigger>
             </TabsList>
             <TabsContent value="ai" className="min-h-0 flex-1">
-              <ChatPanel projectId={projectId} selectedId={selectedId} />
+              <ChatPanel
+                projectId={projectId}
+                selected={selected && { id: selected.id, type: selected.type }}
+                onClearSelection={() => setSelectedId(null)}
+              />
             </TabsContent>
             <TabsContent value="sections" className="min-h-0 flex-1">
               <SectionsPanel doc={doc} selectedId={selectedId} onSelect={setSelectedId} apply={apply} />

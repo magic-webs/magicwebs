@@ -10,6 +10,7 @@
 
 import type * as apiKeys from "../apiKeys.js";
 import type * as auth from "../auth.js";
+import type * as chats from "../chats.js";
 import type * as cloudflare from "../cloudflare.js";
 import type * as dashboard from "../dashboard.js";
 import type * as domains from "../domains.js";
@@ -35,6 +36,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   apiKeys: typeof apiKeys;
   auth: typeof auth;
+  chats: typeof chats;
   cloudflare: typeof cloudflare;
   dashboard: typeof dashboard;
   domains: typeof domains;

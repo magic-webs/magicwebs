@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values"
 import { emptyPageDoc } from "@magicwebs/page-schema"
 
 import { internal } from "./_generated/api"
+import { deleteChat } from "./chats"
 import { mutation, query } from "./_generated/server"
 import { ownedProject, requireProject, requireUser, sitesRootDomain, slugify, viewerProjects } from "./lib"
 import { aiEffort, aiMode, aiModel } from "./models"
@@ -153,6 +154,7 @@ export const remove = mutation({
     for (const brief of briefs) {
       for (const file of brief.screenshots) await ctx.storage.delete(file)
     }
+    await deleteChat(ctx, projectId)
     for (const table of ["drafts", "edits", "versions", "jobs", "rebuildBriefs"] as const) {
       const rows = await ctx.db
         .query(table)

@@ -2,10 +2,12 @@
 
 import { useChat } from "@ai-sdk/react"
 import { useAuthToken } from "@convex-dev/auth/react"
-import { DefaultChatTransport, getToolName, isToolUIPart } from "ai"
-import { ArrowUp, Check, Square, TriangleAlert, Wrench } from "lucide-react"
+import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from "ai"
+import { useMutation, useQuery } from "convex/react"
+import { ArrowUp, Check, MessageSquarePlus, RotateCcw, Square, SquareDashedMousePointer, TriangleAlert, Wrench, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
+import { api } from "@magicwebs/backend/convex/_generated/api"
 import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
 
 import { Button } from "@/components/ui/button"
@@ -21,11 +23,61 @@ const SUGGESTIONS = [
   "Use Playfair Display for headings",
 ]
 
-function toolLabel(name: string) {
-  return name.replace(/_/g, " ")
+const SECTION_SUGGESTIONS = ["Rewrite this section's copy", "Make this section stand out more", "Hide this section"]
+
+/** What each tool call reads as in the conversation, while it runs and once done. */
+const TOOL_LABELS: Record<string, [running: string, done: string]> = {
+  get_page_outline: ["Reading the page", "Read the page"],
+  get_section: ["Reading a section", "Read a section"],
+  get_theme_and_meta: ["Reading the theme", "Read the theme"],
+  search_page_css: ["Searching the styles", "Searched the styles"],
+  apply_operations: ["Making changes", "Made changes"],
+  publish_page: ["Publishing", "Published"],
+  list_versions: ["Checking versions", "Checked versions"],
+  rollback_to_version: ["Rolling back", "Rolled back"],
 }
 
-export function ChatPanel({ projectId, selectedId }: { projectId: Id<"projects">; selectedId: string | null }) {
+function toolLabel(name: string, done: boolean) {
+  const known = TOOL_LABELS[name]
+  if (known) return known[done ? 1 : 0]
+  return done ? "Edited the page" : "Editing the page"
+}
+
+/** The edit results a tool returned ("Set props.heading on s_hero"), if any. */
+function toolSummary(output: unknown): string | null {
+  const results = (output as { results?: unknown } | undefined)?.results
+  if (!Array.isArray(results) || results.length === 0) return null
+  const text = results.map(String).join("; ")
+  return text.length > 120 ? text.slice(0, 120) + "…" : text
+}
+
+type Selected = { id: string; type: string } | null
+
+type ChatPanelProps = {
+  projectId: Id<"projects">
+  selected: Selected
+  onClearSelection: () => void
+}
+
+/** The editor's AI chat. The conversation is stored per project, so it is still here after a reload. */
+export function ChatPanel(props: ChatPanelProps) {
+  const stored = useQuery(api.chats.list, { projectId: props.projectId })
+  if (stored === undefined) {
+    return (
+      <div className="grid h-full place-items-center">
+        <Spinner className="text-muted-foreground" />
+      </div>
+    )
+  }
+  return <Conversation key={props.projectId} {...props} initialMessages={stored as UIMessage[]} />
+}
+
+function Conversation({
+  projectId,
+  selected,
+  onClearSelection,
+  initialMessages,
+}: ChatPanelProps & { initialMessages: UIMessage[] }) {
   // The chat runs on the platform's AI, so the API requires the user's session token.
   // useChat always sends with the latest transport, so a refreshed token
   // takes effect without resetting the conversation.
@@ -34,30 +86,52 @@ export function ChatPanel({ projectId, selectedId }: { projectId: Id<"projects">
     () =>
       new DefaultChatTransport({
         api: `${API_URL}/chat`,
-        body: { projectId },
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        // The server holds the conversation; send only the newest message.
+        prepareSendMessagesRequest: ({ messages, body }) => ({
+          body: { projectId, message: messages.at(-1), selectedId: body?.selectedId ?? null },
+        }),
       }),
     [projectId, token],
   )
-  const { messages, sendMessage, status, stop, error } = useChat({ id: projectId, transport })
+  const { messages, setMessages, sendMessage, regenerate, status, stop, error, clearError } = useChat({
+    id: projectId,
+    messages: initialMessages,
+    transport,
+  })
+  const clear = useMutation(api.chats.clear)
   const [input, setInput] = useState("")
   const bottomRef = useRef<HTMLDivElement>(null)
   const busy = status === "submitted" || status === "streaming"
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" })
-  }, [messages])
+  }, [messages, status])
 
   function send(text: string) {
     if (!text.trim() || busy) return
-    // Tell the model which section the user has selected, so "this section" works.
-    const context = selectedId ? `\n\n(Selected section: ${selectedId})` : ""
-    sendMessage({ text: text.trim() + context })
+    sendMessage({ text: text.trim() }, { body: { selectedId: selected?.id } })
     setInput("")
+  }
+
+  async function newChat() {
+    if (busy) return
+    setMessages([])
+    clearError()
+    await clear({ projectId })
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {messages.length > 0 && (
+        <div className="flex items-center justify-end border-b px-3 py-1.5">
+          <Button variant="ghost" size="sm" onClick={newChat} disabled={busy}>
+            <MessageSquarePlus />
+            New chat
+          </Button>
+        </div>
+      )}
+
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 text-sm">
         {messages.length === 0 && (
           <div className="flex flex-col gap-3">
@@ -65,7 +139,7 @@ export function ChatPanel({ projectId, selectedId }: { projectId: Id<"projects">
               Describe a change and the AI edits the page. Click a section in the preview to talk about it directly.
             </p>
             <div className="flex flex-wrap gap-2">
-              {SUGGESTIONS.map((s) => (
+              {(selected ? SECTION_SUGGESTIONS : SUGGESTIONS).map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -86,7 +160,8 @@ export function ChatPanel({ projectId, selectedId }: { projectId: Id<"projects">
           >
             {message.parts.map((part, i) => {
               if (part.type === "text") {
-                const text = message.role === "user" ? part.text.replace(/\n\n\(Selected section: .*\)$/, "") : part.text
+                // Older messages carried the selection inline; hide it.
+                const text = part.text.replace(/\n\n\(Selected section: .*\)$/, "")
                 return (
                   <p key={i} className="whitespace-pre-wrap">
                     {text}
@@ -98,16 +173,20 @@ export function ChatPanel({ projectId, selectedId }: { projectId: Id<"projects">
                 const failed =
                   part.state === "output-error" ||
                   (done && (part.output as { ok?: boolean } | undefined)?.ok === false)
+                const summary = done && !failed ? toolSummary(part.output) : null
                 return (
-                  <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <div key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
                     {failed ? (
-                      <TriangleAlert className="size-3.5 text-destructive" />
+                      <TriangleAlert className="mt-px size-3.5 shrink-0 text-destructive" />
                     ) : done ? (
-                      <Check className="size-3.5 text-emerald-600" />
+                      <Check className="mt-px size-3.5 shrink-0 text-emerald-600" />
                     ) : (
-                      <Wrench className="size-3.5 animate-pulse" />
+                      <Wrench className="mt-px size-3.5 shrink-0 animate-pulse" />
                     )}
-                    {toolLabel(getToolName(part))}
+                    <span className="min-w-0">
+                      {failed ? `${toolLabel(getToolName(part), false)} failed` : toolLabel(getToolName(part), done)}
+                      {summary && <span className="block truncate text-muted-foreground/80">{summary}</span>}
+                    </span>
                   </div>
                 )
               }
@@ -116,18 +195,52 @@ export function ChatPanel({ projectId, selectedId }: { projectId: Id<"projects">
           </div>
         ))}
 
-        {status === "submitted" && <Spinner className="text-muted-foreground" />}
-        {error && <p className="text-xs text-destructive">The assistant hit an error: {error.message}</p>}
+        {status === "submitted" && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Spinner /> Thinking…
+          </div>
+        )}
+        {error && (
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            <TriangleAlert className="size-3.5 shrink-0" />
+            <span className="min-w-0 flex-1">Something went wrong with that reply.</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => regenerate({ body: { selectedId: selected?.id } })}
+            >
+              <RotateCcw />
+              Retry
+            </Button>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
       <form
-        className="border-t p-3"
+        className="flex flex-col gap-2 border-t p-3"
         onSubmit={(e) => {
           e.preventDefault()
           send(input)
         }}
       >
+        {selected && (
+          <div className="flex items-center gap-1.5 self-start rounded-md border bg-muted/50 py-0.5 pr-0.5 pl-2 text-xs">
+            <SquareDashedMousePointer className="size-3.5 text-muted-foreground" />
+            <span>
+              Selected: <span className="font-medium">{selected.type}</span>
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={onClearSelection}
+              aria-label="Clear the selected section"
+            >
+              <X />
+            </Button>
+          </div>
+        )}
         <div className="relative">
           <Textarea
             value={input}
@@ -138,19 +251,33 @@ export function ChatPanel({ projectId, selectedId }: { projectId: Id<"projects">
                 send(input)
               }
             }}
-            placeholder={selectedId ? "Change the selected section…" : "Ask for a change…"}
+            placeholder={selected ? "Change the selected section…" : "Ask for a change…"}
             className="max-h-40 min-h-20 resize-none pr-12"
           />
           {busy ? (
-            <Button type="button" size="icon-sm" variant="secondary" className="absolute right-2 bottom-2" onClick={stop} aria-label="Stop">
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="secondary"
+              className="absolute right-2 bottom-2"
+              onClick={stop}
+              aria-label="Stop"
+            >
               <Square />
             </Button>
           ) : (
-            <Button type="submit" size="icon-sm" className="absolute right-2 bottom-2" disabled={!input.trim()} aria-label="Send">
+            <Button
+              type="submit"
+              size="icon-sm"
+              className="absolute right-2 bottom-2"
+              disabled={!input.trim()}
+              aria-label="Send"
+            >
               <ArrowUp />
             </Button>
           )}
         </div>
+        <p className="text-[11px] text-muted-foreground">Enter to send, Shift+Enter for a new line.</p>
       </form>
     </div>
   )

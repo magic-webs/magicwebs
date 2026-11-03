@@ -107,6 +107,19 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_project", ["projectId"]),
 
+  /**
+   * The in-app AI chat of each project, one row per message, in order. Holds
+   * AI SDK UI messages, including the page context each user turn was sent
+   * with, so the conversation replays byte for byte and stays prompt-cached.
+   */
+  chatMessages: defineTable({
+    projectId: v.id("projects"),
+    messageId: v.string(),
+    message: v.any(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_message", ["projectId", "messageId"]),
+
   /** Long strings of stored pages (exact clones' markup and CSS), see lib.ts. */
   blobs: defineTable({
     hash: v.string(),

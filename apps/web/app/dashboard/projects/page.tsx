@@ -75,7 +75,7 @@ export default function ProjectsPage() {
 
       <div className="flex flex-col gap-3">
         <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-          <TabsList className="max-w-full overflow-x-auto">
+          <TabsList className="max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {FILTERS.map(({ value, label }) => (
               <TabsTrigger key={value} value={value}>
                 {label}

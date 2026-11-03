@@ -39,7 +39,7 @@ export default function ActivityPage() {
         description="Every edit and publish across your projects, whether it came from the editor, the AI chat or an MCP client."
       />
       <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-        <TabsList className="max-w-full overflow-x-auto">
+        <TabsList className="max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {FILTERS.map(({ value, label }) => (
             <TabsTrigger key={value} value={value}>
               {label}

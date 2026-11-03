@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation"
 import { api } from "@magicwebs/backend/convex/_generated/api"
 
 import {
-  ArrowLeftIcon,
   ClockIcon,
   FolderIcon,
   GlobeIcon,
@@ -121,12 +120,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <SidebarFooter>
           <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton tooltip="Back to the site" render={<Link href="/" />}>
-                <ArrowLeftIcon />
-                <span>Back to the site</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
             <SidebarMenuItem>
               <ProfileMenu variant="sidebar" />
             </SidebarMenuItem>

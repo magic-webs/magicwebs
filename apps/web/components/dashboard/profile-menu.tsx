@@ -9,7 +9,6 @@ import { useRouter } from "next/navigation"
 import { api } from "@magicwebs/backend/convex/_generated/api"
 
 import {
-  ArrowLeftIcon,
   ChevronUpIcon,
   KeyIcon,
   LaptopIcon,
@@ -34,7 +33,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar"
+import { SidebarMenuButton } from "@/components/ui/sidebar"
 
 const THEMES = [
   { value: "light", label: "Light", icon: SunIcon },
@@ -80,7 +79,6 @@ export function ProfileMenu({ variant }: { variant: "header" | "sidebar" }) {
   const { signOut } = useAuthActions()
   const router = useRouter()
   const { theme, setTheme } = useTheme()
-  const { isMobile } = useSidebar()
 
   const trigger =
     variant === "header" ? (
@@ -101,9 +99,10 @@ export function ProfileMenu({ variant }: { variant: "header" | "sidebar" }) {
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-60"
-        align="end"
-        side={variant === "sidebar" && !isMobile ? "right" : "bottom"}
+        // The sidebar row sits at the foot of the screen, so its menu opens upward.
+        className={variant === "sidebar" ? "w-(--anchor-width) min-w-60" : "w-60"}
+        align={variant === "sidebar" ? "start" : "end"}
+        side={variant === "sidebar" ? "top" : "bottom"}
         sideOffset={variant === "sidebar" ? 8 : 4}
       >
         <DropdownMenuGroup>
@@ -141,10 +140,6 @@ export function ProfileMenu({ variant }: { variant: "header" | "sidebar" }) {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem render={<Link href="/" />}>
-            <ArrowLeftIcon />
-            Back to the site
-          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={async () => {
               await signOut()

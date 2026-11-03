@@ -264,7 +264,7 @@ export default function McpPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="claude" className="gap-4">
-            <TabsList className="max-w-full overflow-x-auto">
+            <TabsList className="max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {CLIENTS.map((c) => (
                 <TabsTrigger key={c.id} value={c.id}>
                   {c.label}

@@ -1,13 +1,14 @@
 import { ConvexHttpClient } from "convex/browser"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
+import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
 
 import { mirrorAssets } from "./assets"
-import { capture } from "./capture"
+import { capture, type Capture } from "./capture"
 import { env } from "./env"
 import { cloneExact, PageTooLargeError } from "./exact"
 import { extractFromHtml } from "./extract"
-import { reconstruct } from "./generate"
+import { describeCapture, reconstruct } from "./generate"
 
 const convex = new ConvexHttpClient(env.convexUrl)
 const secret = env.workerSecret
@@ -28,10 +29,16 @@ async function runOnce(): Promise<boolean> {
     } catch (error) {
       // Pages too large to store as markup are rebuilt as typed sections instead.
       if (!(error instanceof PageTooLargeError)) throw error
-      console.warn(`[${job.jobId}] ${error.message}; rebuilding with AI instead`)
-      await step("Page too large to copy exactly, rebuilding with AI")
       const shot = await capture(job.url)
       const facts = extractFromHtml(shot.html, shot.finalUrl)
+      if (job.ai === "agent") {
+        // Created by an agent over MCP: it rebuilds the page with its own model.
+        console.warn(`[${job.jobId}] ${error.message}; handing the rebuild to the agent`)
+        await handOff(job.jobId, shot, describeCapture(shot, facts))
+        return true
+      }
+      console.warn(`[${job.jobId}] ${error.message}; rebuilding with AI instead`)
+      await step("Page too large to copy exactly, rebuilding with AI")
       await step("Rebuilding sections with AI")
       const rebuilt = await reconstruct(shot, facts, { model: job.model, effort: job.effort })
       usage = rebuilt.usage
@@ -48,6 +55,18 @@ async function runOnce(): Promise<boolean> {
     await convex.mutation(api.jobs.fail, { secret, jobId: job.jobId, error: message.slice(0, 500) })
   }
   return true
+}
+
+/** Upload the screenshots and leave the agent a brief to rebuild the page from. */
+async function handOff(jobId: Id<"jobs">, shot: Capture, text: string) {
+  const screenshots: Id<"_storage">[] = []
+  for (const image of [...shot.desktopSlices, shot.mobile]) {
+    const uploadUrl = await convex.mutation(api.jobs.briefUploadUrl, { secret })
+    const res = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: new Blob([image as Uint8Array<ArrayBuffer>]) })
+    if (!res.ok) throw new Error(`Screenshot upload failed: ${res.status}`)
+    screenshots.push(((await res.json()) as { storageId: Id<"_storage"> }).storageId)
+  }
+  await convex.mutation(api.jobs.handOff, { secret, jobId, url: shot.finalUrl, screenshots, text })
 }
 
 let stopping = false

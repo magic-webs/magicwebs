@@ -4,13 +4,14 @@ import { z } from "zod"
 import { applyOps as applyPageOps, OpError, OpSchema, outline } from "@magicwebs/page-schema"
 
 import { mutation, query } from "./_generated/server"
-import { getDraft, loadDoc, storeDoc } from "./lib"
+import { getDraft, loadDoc, ownedProject, requireProject, storeDoc } from "./lib"
 import { scheduleAutoPublish } from "./versions"
 
 /** The live draft. Editors subscribe to this, so every edit shows up instantly. */
 export const get = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
+    if (!(await ownedProject(ctx, projectId))) return null
     const draft = await ctx.db
       .query("drafts")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
@@ -22,17 +23,22 @@ export const get = query({
 
 export const outlineOf = query({
   args: { projectId: v.id("projects") },
-  handler: async (ctx, { projectId }) => outline(await loadDoc(ctx, (await getDraft(ctx, projectId)).doc)),
+  handler: async (ctx, { projectId }) => {
+    await requireProject(ctx, projectId)
+    return outline(await loadDoc(ctx, (await getDraft(ctx, projectId)).doc))
+  },
 })
 
 export const recentEdits = query({
   args: { projectId: v.id("projects") },
-  handler: async (ctx, { projectId }) =>
-    ctx.db
+  handler: async (ctx, { projectId }) => {
+    if (!(await ownedProject(ctx, projectId))) return []
+    return ctx.db
       .query("edits")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .order("desc")
-      .take(30),
+      .take(30)
+  },
 })
 
 /**
@@ -47,6 +53,7 @@ export const applyOps = mutation({
     source: v.union(v.literal("editor"), v.literal("ai"), v.literal("mcp")),
   },
   handler: async (ctx, args) => {
+    await requireProject(ctx, args.projectId)
     const parsed = z.array(OpSchema).safeParse(args.ops)
     if (!parsed.success) {
       throw new ConvexError(`Invalid operation: ${z.prettifyError(parsed.error)}`)

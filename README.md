@@ -29,6 +29,8 @@ packages/
 
   Pages too big to copy (over 4 MB) are rebuilt by the AI model chosen at creation instead. Exact markup is sanitized every time it is rendered (`packages/page-schema/src/sanitize.ts`), and long strings are stored in the `blobs` table rather than inside the draft, so pages can exceed Convex's 1 MiB document limit.
 - **Publishing** snapshots the draft as an immutable version and writes it to Workers KV. The single edge Worker maps the hostname to a project, server-renders the published JSON with the shared renderer, and caches the HTML per version. Rolling back points the site at an earlier version.
+- **Accounts**: people sign in to the platform with email and password or Google (Convex Auth). Every project belongs to a user, and every Convex function checks that the caller owns what it touches. The API server never uses a privileged client: the AI chat runs as the signed-in user's session, and MCP clients as the owner of their API key.
+- **Whose AI**: the in-app AI chat and clones started on the platform run on the platform's AI Gateway key. MCP clients (Claude Code, Cursor, any agent) bring their own model and never use the platform's AI: when a page an agent clones is too large to copy exactly, the crawler leaves a rebuild brief (screenshots and the captured structure) instead of calling the AI, and the agent rebuilds the page itself with `get_rebuild_brief` and `submit_rebuilt_page`.
 - **Custom domains** use Cloudflare for SaaS: Convex creates the custom hostname, shows the DNS records to add, and routes the hostname once Cloudflare reports it active.
 
 ## Running locally
@@ -39,7 +41,10 @@ Requires Bun 1.4+.
 bun install
 cp apps/api/.env.example apps/api/.env          # fill in CONVEX_URL, AI_GATEWAY_API_KEY
 cp apps/crawler/.env.example apps/crawler/.env  # fill in CONVEX_URL, WORKER_SECRET, AI_GATEWAY_API_KEY
-npx convex env set WORKER_SECRET <same-secret>  # run inside packages/backend
+bun run secrets      # WORKER_SECRET for the crawler and Convex, plus Convex Auth's JWT_PRIVATE_KEY and JWKS
+npx convex env set SITE_URL http://localhost:3000  # run inside packages/backend
+# Google sign-in (optional): AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET, with the redirect URI
+# <your CONVEX_SITE_URL>/api/auth/callback/google
 
 bun run dev           # all of the below at once (or e.g. `bun run dev web api`)
 
@@ -61,4 +66,8 @@ bun run dev:edge      # Cloudflare Worker via wrangler
 
 ## Connecting an MCP client
 
-The API exposes a Streamable HTTP MCP endpoint at `/mcp`, authenticated with `Authorization: Bearer $MCP_API_KEY`. Tools include `list_projects`, `clone_landing_page`, `get_page_outline`, `get_section`, every edit operation, `apply_operations`, `publish_page`, `list_versions` and `rollback_to_version`.
+The API exposes a Streamable HTTP MCP endpoint at `/mcp`. Create a personal API key on the dashboard's **MCP & API** page and send it as `Authorization: Bearer <key>`. A key acts as its owner and reaches only their projects; revoking it takes effect immediately. Only a hash of each key is stored.
+
+Tools include `list_projects`, `clone_landing_page`, `get_rebuild_brief`, `submit_rebuilt_page`, `get_page_outline`, `get_section`, every edit operation, `apply_operations`, `publish_page`, `list_versions` and `rollback_to_version`.
+
+Projects created before accounts existed have no owner. Give them to an account with `bunx convex run migrations:claimProjects '{"email":"you@example.com"}'` (inside packages/backend, after signing up).

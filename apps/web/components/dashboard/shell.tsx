@@ -1,8 +1,10 @@
 "use client"
 
+import { useAuthActions } from "@convex-dev/auth/react"
 import { useQuery } from "convex/react"
 import {
   Activity,
+  LogOut,
   BarChart3,
   FolderKanban,
   Globe,
@@ -13,7 +15,7 @@ import {
   ArrowUpRight,
 } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 
@@ -59,6 +61,9 @@ function isActive(pathname: string, href: string) {
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { signOut } = useAuthActions()
+  const viewer = useQuery(api.users.viewer)
   const projects = useQuery(api.projects.list)
   const cloning = projects?.filter((p) => p.status === "cloning").length ?? 0
   const current = ALL.find((item) => isActive(pathname, item.href))
@@ -124,6 +129,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <SidebarMenuButton tooltip="Back to the site" render={<Link href="/" />}>
                 <ArrowUpRight />
                 <span>Back to the site</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Sign out"
+                onClick={async () => {
+                  await signOut()
+                  router.replace("/signin")
+                }}
+              >
+                <LogOut />
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span>Sign out</span>
+                  {viewer?.email && <span className="truncate text-xs text-muted-foreground">{viewer.email}</span>}
+                </span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

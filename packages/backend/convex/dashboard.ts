@@ -1,30 +1,23 @@
 import { query } from "./_generated/server"
 import type { Doc, Id } from "./_generated/dataModel"
-import type { QueryCtx } from "./_generated/server"
+import { viewerProjects } from "./lib"
 
-// Read models for the dashboard, which looks across every project at once.
+// Read models for the dashboard, which looks across all of the signed-in
+// user's projects at once.
 
-async function projectNames(ctx: QueryCtx, ids: Id<"projects">[]) {
-  const names = new Map<Id<"projects">, string>()
-  for (const id of new Set(ids)) {
-    const project = await ctx.db.get(id)
-    if (project) names.set(id, project.name)
-  }
-  return names
-}
-
-/** Every domain with the name of the project it serves, newest first. */
+/** Every domain of the user's projects with the project's name, newest first. */
 export const domains = query({
   args: {},
   handler: async (ctx) => {
-    const domains = await ctx.db.query("domains").order("desc").take(200)
-    const names = await projectNames(
-      ctx,
-      domains.map((d) => d.projectId),
-    )
-    return domains
-      .filter((d) => names.has(d.projectId))
-      .map((d) => ({ ...d, projectName: names.get(d.projectId)! }))
+    const rows = []
+    for (const project of await viewerProjects(ctx)) {
+      const domains = await ctx.db
+        .query("domains")
+        .withIndex("by_project", (q) => q.eq("projectId", project._id))
+        .collect()
+      rows.push(...domains.map((d) => ({ ...d, projectName: project.name })))
+    }
+    return rows.sort((a, b) => b._creationTime - a._creationTime).slice(0, 200)
   },
 })
 
@@ -49,13 +42,30 @@ export type ActivityItem =
       createdAt: number
     }
 
-/** Recent edits and publishes across all projects, merged into one feed. */
+/** Recent edits and publishes across the user's projects, merged into one feed. */
 export const activity = query({
   args: {},
   handler: async (ctx): Promise<ActivityItem[]> => {
-    const edits = await ctx.db.query("edits").order("desc").take(60)
-    const versions = await ctx.db.query("versions").order("desc").take(60)
-    const names = await projectNames(ctx, [...edits.map((e) => e.projectId), ...versions.map((v) => v.projectId)])
+    const projects = await viewerProjects(ctx)
+    const names = new Map(projects.map((p) => [p._id, p.name]))
+    const edits: Doc<"edits">[] = []
+    const versions: Doc<"versions">[] = []
+    for (const project of projects) {
+      edits.push(
+        ...(await ctx.db
+          .query("edits")
+          .withIndex("by_project", (q) => q.eq("projectId", project._id))
+          .order("desc")
+          .take(60)),
+      )
+      versions.push(
+        ...(await ctx.db
+          .query("versions")
+          .withIndex("by_project", (q) => q.eq("projectId", project._id))
+          .order("desc")
+          .take(60)),
+      )
+    }
 
     const items: ActivityItem[] = []
     for (const e of edits) {

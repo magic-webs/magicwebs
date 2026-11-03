@@ -13,8 +13,10 @@ import { api } from "@magicwebs/backend/convex/_generated/api"
 import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
 import { outline, SECTION_TYPES } from "@magicwebs/page-schema"
 
+import type { ConvexHttpClient } from "convex/browser"
+
 import { env } from "./env"
-import { convex, errorMessage, PAGE_TOOLS } from "./tools"
+import { errorMessage, PAGE_TOOLS } from "./tools"
 
 const ChatRequest = z.object({
   projectId: z.string(),
@@ -33,7 +35,11 @@ How to work:
 - Publish only when the user explicitly asks.
 - After editing, reply with one or two sentences saying what changed.`
 
-export async function handleChat(request: Request): Promise<Response> {
+/**
+ * The in-app AI chat. It runs on the platform's AI Gateway key, so it is only
+ * open to signed-in users of the platform; `convex` is signed in as them.
+ */
+export async function handleChat(request: Request, convex: ConvexHttpClient): Promise<Response> {
   const body = ChatRequest.safeParse(await request.json())
   if (!body.success) return Response.json({ error: "Invalid request" }, { status: 400 })
 
@@ -50,7 +56,7 @@ export async function handleChat(request: Request): Promise<Response> {
         inputSchema: def.input,
         execute: async (input: Record<string, unknown>) => {
           try {
-            return await def.run(projectId, input, "ai")
+            return await def.run(convex, projectId, input, "ai")
           } catch (error) {
             return { ok: false, error: errorMessage(error) }
           }

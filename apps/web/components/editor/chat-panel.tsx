@@ -1,6 +1,7 @@
 "use client"
 
 import { useChat } from "@ai-sdk/react"
+import { useAuthToken } from "@convex-dev/auth/react"
 import { DefaultChatTransport, getToolName, isToolUIPart } from "ai"
 import { ArrowUp, Check, Square, TriangleAlert, Wrench } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -25,9 +26,18 @@ function toolLabel(name: string) {
 }
 
 export function ChatPanel({ projectId, selectedId }: { projectId: Id<"projects">; selectedId: string | null }) {
+  // The chat runs on the platform's AI, so the API requires the user's session token.
+  // useChat always sends with the latest transport, so a refreshed token
+  // takes effect without resetting the conversation.
+  const token = useAuthToken()
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: `${API_URL}/chat`, body: { projectId } }),
-    [projectId],
+    () =>
+      new DefaultChatTransport({
+        api: `${API_URL}/chat`,
+        body: { projectId },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      }),
+    [projectId, token],
   )
   const { messages, sendMessage, status, stop, error } = useChat({ id: projectId, transport })
   const [input, setInput] = useState("")

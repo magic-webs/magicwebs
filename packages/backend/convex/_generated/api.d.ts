@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as apiKeys from "../apiKeys.js";
+import type * as auth from "../auth.js";
 import type * as cloudflare from "../cloudflare.js";
 import type * as dashboard from "../dashboard.js";
 import type * as domains from "../domains.js";
@@ -20,6 +22,8 @@ import type * as lib from "../lib.js";
 import type * as migrations from "../migrations.js";
 import type * as models from "../models.js";
 import type * as projects from "../projects.js";
+import type * as rebuilds from "../rebuilds.js";
+import type * as users from "../users.js";
 import type * as versions from "../versions.js";
 
 import type {
@@ -29,6 +33,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  apiKeys: typeof apiKeys;
+  auth: typeof auth;
   cloudflare: typeof cloudflare;
   dashboard: typeof dashboard;
   domains: typeof domains;
@@ -41,6 +47,8 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   models: typeof models;
   projects: typeof projects;
+  rebuilds: typeof rebuilds;
+  users: typeof users;
   versions: typeof versions;
 }>;
 

@@ -5,7 +5,7 @@ import { PageDocSchema } from "@magicwebs/page-schema"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server"
-import { getDraft, loadDoc } from "./lib"
+import { getDraft, loadDoc, ownedProject, requireProject } from "./lib"
 
 /** How long after the last edit the draft is published automatically. */
 const AUTO_PUBLISH_DELAY_MS = 1000
@@ -13,6 +13,7 @@ const AUTO_PUBLISH_DELAY_MS = 1000
 export const list = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
+    if (!(await ownedProject(ctx, projectId))) return []
     const versions = await ctx.db
       .query("versions")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
@@ -26,7 +27,8 @@ export const get = query({
   args: { versionId: v.id("versions") },
   handler: async (ctx, { versionId }) => {
     const version = await ctx.db.get(versionId)
-    return version && { ...version, doc: await loadDoc(ctx, version.doc) }
+    if (!version || !(await ownedProject(ctx, version.projectId))) return null
+    return { ...version, doc: await loadDoc(ctx, version.doc) }
   },
 })
 
@@ -55,7 +57,10 @@ async function publishDraft(ctx: MutationCtx, projectId: Id<"projects">, note?: 
 
 export const publish = mutation({
   args: { projectId: v.id("projects"), note: v.optional(v.string()) },
-  handler: async (ctx, { projectId, note }) => publishDraft(ctx, projectId, note),
+  handler: async (ctx, { projectId, note }) => {
+    await requireProject(ctx, projectId)
+    return publishDraft(ctx, projectId, note)
+  },
 })
 
 /**
@@ -87,6 +92,7 @@ export const autoPublish = internalMutation({
 export const rollback = mutation({
   args: { projectId: v.id("projects"), versionId: v.id("versions") },
   handler: async (ctx, { projectId, versionId }) => {
+    await requireProject(ctx, projectId)
     const version = await ctx.db.get(versionId)
     if (!version || version.projectId !== projectId) throw new ConvexError("Version not found")
     const draft = await getDraft(ctx, projectId)
@@ -110,6 +116,7 @@ export const rollback = mutation({
 export const restoreToDraft = mutation({
   args: { projectId: v.id("projects"), versionId: v.id("versions") },
   handler: async (ctx, { projectId, versionId }) => {
+    await requireProject(ctx, projectId)
     const version = await ctx.db.get(versionId)
     if (!version || version.projectId !== projectId) throw new ConvexError("Version not found")
     const draft = await getDraft(ctx, projectId)

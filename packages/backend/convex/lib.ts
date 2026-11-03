@@ -1,12 +1,57 @@
+import { getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server"
 import { ConvexError } from "convex/values"
 
 import type { PageDoc } from "@magicwebs/page-schema"
 
-import type { Id } from "./_generated/dataModel"
+import type { Doc, Id } from "./_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "./_generated/server"
 
 export function sitesRootDomain(): string {
   return process.env.SITES_ROOT_DOMAIN ?? "magicwebs.ai"
+}
+
+/**
+ * The signed-in user, or null. The session must still exist, so signing out or
+ * revoking an agent's API key cuts off tokens issued before it at once.
+ */
+export async function getViewer(ctx: QueryCtx): Promise<Id<"users"> | null> {
+  const userId = await getAuthUserId(ctx)
+  const sessionId = await getAuthSessionId(ctx)
+  if (!userId || !sessionId || !(await ctx.db.get(sessionId))) return null
+  return userId
+}
+
+export async function requireUser(ctx: QueryCtx): Promise<Id<"users">> {
+  const userId = await getViewer(ctx)
+  if (!userId) throw new ConvexError("Sign in to continue")
+  return userId
+}
+
+/** The project if the signed-in user owns it, else null. */
+export async function ownedProject(ctx: QueryCtx, projectId: Id<"projects">): Promise<Doc<"projects"> | null> {
+  const userId = await getViewer(ctx)
+  if (!userId) return null
+  const project = await ctx.db.get(projectId)
+  return project && project.userId === userId ? project : null
+}
+
+/** The project, or an error that doesn't reveal whether someone else owns it. */
+export async function requireProject(ctx: QueryCtx, projectId: Id<"projects">): Promise<Doc<"projects">> {
+  await requireUser(ctx)
+  const project = await ownedProject(ctx, projectId)
+  if (!project) throw new ConvexError("Project not found")
+  return project
+}
+
+/** The signed-in user's projects, newest first. */
+export async function viewerProjects(ctx: QueryCtx, limit = 100): Promise<Doc<"projects">[]> {
+  const userId = await getViewer(ctx)
+  if (!userId) return []
+  return ctx.db
+    .query("projects")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .order("desc")
+    .take(limit)
 }
 
 /** Machine-to-machine calls (crawler workers) must present the shared secret. */
@@ -39,7 +84,7 @@ function isBlobRef(value: unknown): value is BlobRef {
   return !!value && typeof value === "object" && typeof (value as BlobRef).mwBlob === "string"
 }
 
-async function sha256(text: string): Promise<string> {
+export async function sha256(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("")
 }

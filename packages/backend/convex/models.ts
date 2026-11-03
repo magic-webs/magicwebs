@@ -12,6 +12,13 @@ export const aiEffort = v.union(
   v.literal("max"),
 )
 
+/**
+ * Whose AI rebuilds a page that can't be copied exactly. Projects created on the
+ * platform use the platform's AI Gateway; projects created by an agent over MCP
+ * are handed back to that agent, which rebuilds them with its own model.
+ */
+export const aiMode = v.union(v.literal("platform"), v.literal("agent"))
+
 /** Tokens and USD cost of one rebuild, summed over its retries. */
 export const aiUsage = v.object({
   inputTokens: v.number(),
@@ -23,3 +30,4 @@ export const aiUsage = v.object({
 
 export type AiModel = Infer<typeof aiModel>
 export type AiEffort = Infer<typeof aiEffort>
+export type AiMode = Infer<typeof aiMode>

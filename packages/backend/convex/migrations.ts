@@ -1,4 +1,6 @@
 import { internal } from "./_generated/api"
+import { v } from "convex/values"
+
 import { internalMutation } from "./_generated/server"
 import { sitesRootDomain } from "./lib"
 
@@ -24,5 +26,30 @@ export const moveSubdomainsToRoot = internalMutation({
       moved.push(`${domain.hostname} -> ${hostname}`)
     }
     return moved
+  },
+})
+
+// Projects made before accounts existed have no owner and are invisible to
+// everyone. This gives them to the account with the given email.
+// Run with: bunx convex run migrations:claimProjects '{"email":"you@example.com"}'
+export const claimProjects = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    // Sign-up stores the email as typed, so try that before the lowercase form.
+    let user = null
+    for (const candidate of new Set([email.trim(), email.trim().toLowerCase()])) {
+      user ??= await ctx.db
+        .query("users")
+        .withIndex("email", (q) => q.eq("email", candidate))
+        .first()
+    }
+    if (!user) throw new Error(`No account with email ${email}; sign up first`)
+    let claimed = 0
+    for (const project of await ctx.db.query("projects").collect()) {
+      if (project.userId) continue
+      await ctx.db.patch(project._id, { userId: user._id })
+      claimed++
+    }
+    return { claimed }
   },
 })

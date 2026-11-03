@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server"
 
 import { internal } from "./_generated/api"
+import { auth } from "./auth"
 import type { Id } from "./_generated/dataModel"
 import { httpAction } from "./_generated/server"
 
@@ -8,6 +9,9 @@ import { httpAction } from "./_generated/server"
 // for Workers KV to propagate. Published pages are public, so no secret is needed.
 
 const http = httpRouter()
+
+// Convex Auth's OAuth callbacks and JWKS.
+auth.addHttpRoutes(http)
 
 function json(body: unknown, maxAge: number) {
   return new Response(JSON.stringify(body), {

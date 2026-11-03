@@ -3,24 +3,28 @@ import { ConvexError, v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
 import { action, internalAction, internalMutation, internalQuery, mutation, query, type ActionCtx } from "./_generated/server"
+import { requireActionUser } from "./users"
 import { createCustomHostname, deleteCustomHostname, getCustomHostname, type CustomHostname } from "./cloudflare"
-import { sitesRootDomain } from "./lib"
+import { ownedProject, requireProject, requireUser, sitesRootDomain } from "./lib"
 
 const HOSTNAME = /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
 
 export const list = query({
   args: { projectId: v.id("projects") },
-  handler: async (ctx, { projectId }) =>
-    ctx.db
+  handler: async (ctx, { projectId }) => {
+    if (!(await ownedProject(ctx, projectId))) return []
+    return ctx.db
       .query("domains")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
-      .collect(),
+      .collect()
+  },
 })
 
 /** Attach a customer-owned hostname through Cloudflare for SaaS. */
 export const addCustom = mutation({
   args: { projectId: v.id("projects"), hostname: v.string() },
   handler: async (ctx, args) => {
+    await requireProject(ctx, args.projectId)
     const hostname = args.hostname.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")
     if (!HOSTNAME.test(hostname)) throw new ConvexError("Enter a hostname like www.example.com")
     if (hostname.endsWith(`.${sitesRootDomain()}`)) {
@@ -47,8 +51,9 @@ export const addCustom = mutation({
 export const remove = mutation({
   args: { domainId: v.id("domains") },
   handler: async (ctx, { domainId }) => {
+    await requireUser(ctx)
     const domain = await ctx.db.get(domainId)
-    if (!domain) return
+    if (!domain || !(await ownedProject(ctx, domain.projectId))) throw new ConvexError("Domain not found")
     if (domain.kind === "subdomain") throw new ConvexError("The platform subdomain can't be removed")
     await ctx.db.delete(domainId)
     await ctx.scheduler.runAfter(0, internal.domains.deprovision, {
@@ -62,10 +67,19 @@ export const remove = mutation({
 export const refresh = action({
   args: { domainId: v.id("domains") },
   handler: async (ctx, { domainId }) => {
-    const domain = await ctx.runQuery(internal.domains.getInternal, { domainId })
+    const domain = await ctx.runQuery(internal.domains.getOwned, { domainId, userId: await requireActionUser(ctx) })
     if (!domain?.cloudflareId) return
     const result = await getCustomHostname(domain.cloudflareId)
     await applyCloudflareState(ctx, domainId, domain.projectId, result)
+  },
+})
+
+export const getOwned = internalQuery({
+  args: { domainId: v.id("domains"), userId: v.id("users") },
+  handler: async (ctx, { domainId, userId }) => {
+    const domain = await ctx.db.get(domainId)
+    const project = domain && (await ctx.db.get(domain.projectId))
+    return project?.userId === userId ? domain : null
   },
 })
 

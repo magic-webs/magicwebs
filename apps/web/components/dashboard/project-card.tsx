@@ -2,22 +2,22 @@
 
 import { useMutation } from "convex/react"
 import { formatDistanceToNow } from "date-fns"
-import {
-  Copy,
-  ExternalLink,
-  Globe,
-  MoreHorizontal,
-  PencilLine,
-  RotateCw,
-  SquarePen,
-  Trash2,
-  TriangleAlert,
-} from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 
+import {
+  AlertTriangleIcon,
+  CopyIcon,
+  DeleteIcon,
+  EditIcon,
+  ExternalLinkIcon,
+  GlobeIcon,
+  MoreIcon,
+  RefreshIcon,
+  RenameIcon,
+} from "@/components/icons"
 import { ProjectStatus } from "@/components/editor/project-status"
 import {
   AlertDialog,
@@ -79,37 +79,37 @@ export function ProjectActions({ project, className }: { project: Project; class
         <DropdownMenuTrigger
           render={<Button size="icon-sm" variant="ghost" className={className} aria-label={`Actions for ${project.name}`} />}
         >
-          <MoreHorizontal />
+          <MoreIcon />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuItem render={<Link href={`/projects/${project._id}`} />}>
-            <SquarePen />
+            <EditIcon />
             Open editor
           </DropdownMenuItem>
           {project.publishedVersionId && (
             <>
               <DropdownMenuItem render={<a href={liveUrl} target="_blank" rel="noreferrer" />}>
-                <ExternalLink />
+                <ExternalLinkIcon />
                 View live
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigator.clipboard?.writeText(liveUrl)}>
-                <Copy />
+                <CopyIcon />
                 Copy live URL
               </DropdownMenuItem>
             </>
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => open("rename")}>
-            <PencilLine />
+            <RenameIcon />
             Rename
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => open("reclone")} disabled={project.status === "cloning"}>
-            <RotateCw />
+            <RefreshIcon />
             Clone again
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => open("delete")}>
-            <Trash2 />
+            <DeleteIcon />
             Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -216,14 +216,14 @@ export function ProjectCard({ project }: { project: Project }) {
       )}
       {project.status === "failed" && project.error && (
         <p className="flex items-start gap-1.5 text-xs text-destructive">
-          <TriangleAlert className="mt-px size-3.5 shrink-0" />
+          <AlertTriangleIcon solid className="mt-px size-3.5 shrink-0" />
           <span className="line-clamp-2">{project.error}</span>
         </p>
       )}
 
       <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span className={cn("flex min-w-0 items-center gap-1.5", project.publishedVersionId && "text-foreground")}>
-          <Globe className="size-3.5 shrink-0" />
+          <GlobeIcon className="size-3.5 shrink-0" />
           <span className="truncate">{project.hostname}</span>
         </span>
         <span className="ml-auto tabular-nums">

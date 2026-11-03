@@ -2,13 +2,20 @@
 
 import { useAction, useMutation, useQuery } from "convex/react"
 import { formatDistanceToNow } from "date-fns"
-import { Check, Copy, ExternalLink, Globe, RefreshCw, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
 
+import {
+  CopiedIcon,
+  CopyIcon,
+  DeleteIcon,
+  ExternalLinkIcon,
+  GlobeIcon,
+  RefreshIcon,
+} from "@/components/icons"
 import { errorText } from "@/components/dashboard/lib"
 import { PageHeader } from "@/components/dashboard/shell"
 import { dnsRecords } from "@/components/editor/domains-dialog"
@@ -40,7 +47,7 @@ function CopyValue({ value }: { value: string }) {
         }
       }}
     >
-      {copied ? <Check /> : <Copy />}
+      {copied ? <CopiedIcon /> : <CopyIcon />}
     </Button>
   )
 }
@@ -158,7 +165,7 @@ export default function DomainsPage() {
               return (
                 <li key={domain._id} className="flex flex-col gap-3 p-4">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <Globe className="size-4 shrink-0 text-muted-foreground" />
+                    <GlobeIcon className="size-4 shrink-0 text-muted-foreground" />
                     <a
                       href={`https://${domain.hostname}`}
                       target="_blank"
@@ -189,7 +196,7 @@ export default function DomainsPage() {
                         render={<a href={`https://${domain.hostname}`} target="_blank" rel="noreferrer" />}
                         aria-label="Open"
                       >
-                        <ExternalLink />
+                        <ExternalLinkIcon />
                       </Button>
                       {domain.kind === "custom" && (
                         <>
@@ -200,7 +207,7 @@ export default function DomainsPage() {
                             disabled={refreshing === domain._id}
                             onClick={() => onRefresh(domain._id)}
                           >
-                            {refreshing === domain._id ? <Spinner /> : <RefreshCw />}
+                            {refreshing === domain._id ? <Spinner /> : <RefreshIcon />}
                           </Button>
                           <Button
                             size="icon-sm"
@@ -210,7 +217,7 @@ export default function DomainsPage() {
                               if (confirm(`Disconnect ${domain.hostname}?`)) remove({ domainId: domain._id })
                             }}
                           >
-                            <Trash2 />
+                            <DeleteIcon />
                           </Button>
                         </>
                       )}

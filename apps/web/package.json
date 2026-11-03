@@ -18,6 +18,8 @@
     "@magicwebs/backend": "workspace:*",
     "@magicwebs/page-schema": "workspace:*",
     "@magicwebs/renderer": "workspace:*",
+    "@pikaicons/core-free": "^0.1.0",
+    "@pikaicons/react": "^0.1.0",
     "@shadcn/react": "^0.3.1",
     "ai": "^7.0.159",
     "class-variance-authority": "^0.7.1",

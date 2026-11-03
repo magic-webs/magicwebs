@@ -1,9 +1,9 @@
 "use client"
 
-import { Monitor, Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useSyncExternalStore } from "react"
 
+import { LaptopIcon, MoonIcon, SunIcon } from "@/components/icons"
 import { API_URL, EFFORTS, MCP_URL, MODELS, useProjectDefaults } from "@/components/dashboard/lib"
 import { PageHeader } from "@/components/dashboard/shell"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,9 +14,9 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 const MODEL_ITEMS = MODELS.map((m) => ({ value: m.value, label: `${m.label} · ${m.hint}` }))
 
 const THEMES = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "system", label: "System", icon: Monitor },
+  { value: "light", label: "Light", icon: SunIcon },
+  { value: "dark", label: "Dark", icon: MoonIcon },
+  { value: "system", label: "System", icon: LaptopIcon },
 ]
 
 function Row({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
@@ -104,7 +104,7 @@ export default function SettingsPage() {
             >
               {THEMES.map(({ value, label, icon: Icon }) => (
                 <ToggleGroupItem key={value} value={value} aria-label={label} className="gap-1.5 px-3">
-                  <Icon />
+                  <Icon solid={mounted && theme === value} />
                   {label}
                 </ToggleGroupItem>
               ))}

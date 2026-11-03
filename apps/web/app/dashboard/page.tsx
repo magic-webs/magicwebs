@@ -1,11 +1,18 @@
 "use client"
 
 import { useQuery } from "convex/react"
-import { ArrowRight, Coins, FolderKanban, Globe, Loader, Plug } from "lucide-react"
 import Link from "next/link"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 
+import {
+  ArrowRightIcon,
+  FolderIcon,
+  GlobeIcon,
+  ServerIcon,
+  WalletIcon,
+} from "@/components/icons"
+import { Spinner } from "@/components/ui/spinner"
 import { ActivityFeed } from "@/components/dashboard/activity-feed"
 import { formatCost } from "@/components/dashboard/lib"
 import { NewProjectForm } from "@/components/dashboard/new-project"
@@ -26,17 +33,17 @@ export default function OverviewPage() {
   const customDomains = domains?.filter((d) => d.kind === "custom")
 
   const stats = [
-    { label: "Projects", value: projects?.length, icon: FolderKanban, hint: cloning ? `${cloning} cloning now` : "All ready" },
-    { label: "Live sites", value: live, icon: Globe, hint: "Served from the edge" },
+    { label: "Projects", value: projects?.length, icon: FolderIcon, hint: cloning ? `${cloning} cloning now` : "All ready" },
+    { label: "Live sites", value: live, icon: GlobeIcon, hint: "Served from the edge" },
     {
       label: "Custom domains",
       value: customDomains?.length,
-      icon: Plug,
+      icon: ServerIcon,
       hint: customDomains
         ? `${customDomains.filter((d) => d.status === "active").length} active`
         : undefined,
     },
-    { label: "AI cost", value: cost === undefined ? undefined : formatCost(cost), icon: Coins, hint: "Latest rebuild per project" },
+    { label: "AI cost", value: cost === undefined ? undefined : formatCost(cost), icon: WalletIcon, hint: "Latest rebuild per project" },
   ]
 
   return (
@@ -61,7 +68,7 @@ export default function OverviewPage() {
             <CardHeader>
               <CardDescription>{label}</CardDescription>
               <CardAction>
-                <Icon className="size-4 text-muted-foreground" />
+                <Icon solid className="size-4 text-muted-foreground" />
               </CardAction>
               {value === undefined ? (
                 <Skeleton className="h-8 w-16" />
@@ -80,7 +87,7 @@ export default function OverviewPage() {
             <h2 className="font-medium">Recent projects</h2>
             <Button size="sm" variant="ghost" nativeButton={false} render={<Link href="/dashboard/projects" />}>
               All projects
-              <ArrowRight />
+              <ArrowRightIcon />
             </Button>
           </div>
           {projects === undefined ? (
@@ -109,13 +116,13 @@ export default function OverviewPage() {
             <h2 className="font-medium">Activity</h2>
             <Button size="sm" variant="ghost" nativeButton={false} render={<Link href="/dashboard/activity" />}>
               View all
-              <ArrowRight />
+              <ArrowRightIcon />
             </Button>
           </div>
           <Card>
             <CardContent>
               {activity === undefined ? (
-                <Loader className="mx-auto size-4 animate-spin text-muted-foreground" />
+                <Spinner className="mx-auto size-4 text-muted-foreground" />
               ) : activity.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Edits and publishes show up here.</p>
               ) : (
@@ -127,7 +134,7 @@ export default function OverviewPage() {
           <Card size="sm" className="bg-muted/40">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Plug className="size-4" />
+                <ServerIcon className="size-4" />
                 Edit from your coding agent
               </CardTitle>
               <CardDescription>
@@ -137,7 +144,7 @@ export default function OverviewPage() {
             <CardContent>
               <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/dashboard/mcp" />}>
                 Set up MCP
-                <ArrowRight />
+                <ArrowRightIcon />
               </Button>
             </CardContent>
           </Card>

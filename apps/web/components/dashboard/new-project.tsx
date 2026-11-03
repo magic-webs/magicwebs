@@ -1,12 +1,12 @@
 "use client"
 
 import { useMutation } from "convex/react"
-import { ArrowRight, Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 
+import { ArrowRightIcon, PlusIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -60,7 +60,7 @@ export function NewProjectForm({ autoFocus }: { autoFocus?: boolean }) {
           autoFocus={autoFocus}
         />
         <Button type="submit" size="lg" className="h-10" disabled={submitting || !url.trim()}>
-          {submitting ? <Spinner /> : <ArrowRight />}
+          {submitting ? <Spinner /> : <ArrowRightIcon />}
           Build page
         </Button>
       </div>
@@ -109,7 +109,7 @@ export function NewProjectDialog() {
   return (
     <Dialog>
       <DialogTrigger render={<Button size="sm" />}>
-        <Plus />
+        <PlusIcon />
         New project
       </DialogTrigger>
       <DialogContent className="sm:max-w-xl">

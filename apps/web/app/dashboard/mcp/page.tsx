@@ -2,13 +2,20 @@
 
 import { useAction, useMutation, useQuery } from "convex/react"
 import { formatDistanceToNow } from "date-fns"
-import { Check, Copy, KeyRound, Plug, ShieldCheck, Trash2 } from "lucide-react"
 import { useState } from "react"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
 import { OP_DEFINITIONS } from "@magicwebs/page-schema"
 
+import {
+  CopiedIcon,
+  CopyIcon,
+  DeleteIcon,
+  KeyIcon,
+  ServerIcon,
+  ShieldCheckIcon,
+} from "@/components/icons"
 import { errorText, MCP_URL } from "@/components/dashboard/lib"
 import { PageHeader } from "@/components/dashboard/shell"
 import { Badge } from "@/components/ui/badge"
@@ -95,7 +102,7 @@ function CodeBlock({ code }: { code: string }) {
           }
         }}
       >
-        {copied ? <Check /> : <Copy />}
+        {copied ? <CopiedIcon /> : <CopyIcon />}
       </Button>
     </div>
   )
@@ -167,7 +174,7 @@ function ApiKeys() {
             required
           />
           <Button type="submit" disabled={pending || !name.trim()}>
-            <KeyRound />
+            <KeyIcon />
             Create key
           </Button>
         </form>
@@ -198,7 +205,7 @@ function ApiKeys() {
                   </span>
                 </div>
                 <Button variant="ghost" size="icon-sm" aria-label={`Revoke ${key.name}`} onClick={() => onRevoke(key._id)}>
-                  <Trash2 />
+                  <DeleteIcon />
                 </Button>
               </li>
             ))}
@@ -222,7 +229,7 @@ export default function McpPage() {
         <Card size="sm">
           <CardHeader>
             <CardDescription className="flex items-center gap-1.5">
-              <Plug className="size-3.5" /> Endpoint
+              <ServerIcon solid className="size-3.5" /> Endpoint
             </CardDescription>
             <CardTitle className="font-mono text-sm break-all">{MCP_URL}</CardTitle>
           </CardHeader>
@@ -230,7 +237,7 @@ export default function McpPage() {
         <Card size="sm">
           <CardHeader>
             <CardDescription className="flex items-center gap-1.5">
-              <KeyRound className="size-3.5" /> Authentication
+              <KeyIcon solid className="size-3.5" /> Authentication
             </CardDescription>
             <CardTitle className="text-sm font-normal">Bearer token: a personal API key you create below.</CardTitle>
           </CardHeader>
@@ -238,7 +245,7 @@ export default function McpPage() {
         <Card size="sm">
           <CardHeader>
             <CardDescription className="flex items-center gap-1.5">
-              <ShieldCheck className="size-3.5" /> Transport
+              <ShieldCheckIcon solid className="size-3.5" /> Transport
             </CardDescription>
             <CardTitle className="text-sm font-normal">Streamable HTTP · {CORE_TOOLS.length + EDIT_TOOLS.length} tools</CardTitle>
           </CardHeader>

@@ -2,12 +2,12 @@
 
 import { useQuery } from "convex/react"
 import { formatDistanceToNow } from "date-fns"
-import { LayoutGrid, List, Search } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 
+import { GridIcon, ListIcon, SearchIcon } from "@/components/icons"
 import { formatCost, modelLabel, projectState, type Project } from "@/components/dashboard/lib"
 import { ProjectActions, ProjectCard } from "@/components/dashboard/project-card"
 import { PageHeader } from "@/components/dashboard/shell"
@@ -87,7 +87,7 @@ export default function ProjectsPage() {
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-0 flex-1 sm:max-w-xs">
-            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <SearchIcon className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -115,10 +115,10 @@ export default function ProjectsPage() {
             className="ml-auto"
           >
             <ToggleGroupItem value="grid" aria-label="Grid view">
-              <LayoutGrid />
+              <GridIcon solid={view === "grid"} />
             </ToggleGroupItem>
             <ToggleGroupItem value="list" aria-label="List view">
-              <List />
+              <ListIcon />
             </ToggleGroupItem>
           </ToggleGroup>
         </div>

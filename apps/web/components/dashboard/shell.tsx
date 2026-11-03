@@ -1,24 +1,22 @@
 "use client"
 
-import { useAuthActions } from "@convex-dev/auth/react"
 import { useQuery } from "convex/react"
-import {
-  Activity,
-  LogOut,
-  BarChart3,
-  FolderKanban,
-  Globe,
-  LayoutDashboard,
-  Plug,
-  Settings,
-  Sparkles,
-  ArrowUpRight,
-} from "lucide-react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 
+import {
+  ArrowLeftIcon,
+  ClockIcon,
+  FolderIcon,
+  GlobeIcon,
+  HomeIcon,
+  PieChartIcon,
+  ServerIcon,
+  SettingsIcon,
+  SparkleIcon,
+} from "@/components/icons"
 import { Separator } from "@/components/ui/separator"
 import {
   Sidebar,
@@ -39,18 +37,19 @@ import {
 } from "@/components/ui/sidebar"
 
 import { NewProjectDialog } from "./new-project"
+import { ProfileMenu } from "./profile-menu"
 
 const NAV = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/dashboard/projects", label: "Projects", icon: FolderKanban, badge: "projects" as const },
-  { href: "/dashboard/domains", label: "Domains", icon: Globe },
-  { href: "/dashboard/activity", label: "Activity", icon: Activity },
-  { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
+  { href: "/dashboard", label: "Overview", icon: HomeIcon },
+  { href: "/dashboard/projects", label: "Projects", icon: FolderIcon, badge: "projects" as const },
+  { href: "/dashboard/domains", label: "Domains", icon: GlobeIcon },
+  { href: "/dashboard/activity", label: "Activity", icon: ClockIcon },
+  { href: "/dashboard/usage", label: "Usage", icon: PieChartIcon },
 ]
 
 const CONFIGURE = [
-  { href: "/dashboard/mcp", label: "MCP & API", icon: Plug },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/mcp", label: "MCP & API", icon: ServerIcon },
+  { href: "/dashboard/settings", label: "Settings", icon: SettingsIcon },
 ]
 
 const ALL = [...NAV, ...CONFIGURE]
@@ -61,9 +60,6 @@ function isActive(pathname: string, href: string) {
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const router = useRouter()
-  const { signOut } = useAuthActions()
-  const viewer = useQuery(api.users.viewer)
   const projects = useQuery(api.projects.list)
   const cloning = projects?.filter((p) => p.status === "cloning").length ?? 0
   const current = ALL.find((item) => isActive(pathname, item.href))
@@ -76,7 +72,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" render={<Link href="/" />} tooltip="Magicwebs home">
                 <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
-                  <Sparkles className="size-4" />
+                  <SparkleIcon solid className="size-4" />
                 </span>
                 <span className="flex flex-col leading-tight">
                   <span className="font-semibold">Magicwebs</span>
@@ -95,7 +91,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 {NAV.map(({ href, label, icon: Icon, badge }) => (
                   <SidebarMenuItem key={href}>
                     <SidebarMenuButton isActive={isActive(pathname, href)} tooltip={label} render={<Link href={href} />}>
-                      <Icon />
+                      <Icon solid={isActive(pathname, href)} />
                       <span>{label}</span>
                     </SidebarMenuButton>
                     {badge === "projects" && projects && projects.length > 0 && (
@@ -113,7 +109,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 {CONFIGURE.map(({ href, label, icon: Icon }) => (
                   <SidebarMenuItem key={href}>
                     <SidebarMenuButton isActive={isActive(pathname, href)} tooltip={label} render={<Link href={href} />}>
-                      <Icon />
+                      <Icon solid={isActive(pathname, href)} />
                       <span>{label}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -127,24 +123,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton tooltip="Back to the site" render={<Link href="/" />}>
-                <ArrowUpRight />
+                <ArrowLeftIcon />
                 <span>Back to the site</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Sign out"
-                onClick={async () => {
-                  await signOut()
-                  router.replace("/signin")
-                }}
-              >
-                <LogOut />
-                <span className="flex min-w-0 flex-col leading-tight">
-                  <span>Sign out</span>
-                  {viewer?.email && <span className="truncate text-xs text-muted-foreground">{viewer.email}</span>}
-                </span>
-              </SidebarMenuButton>
+              <ProfileMenu variant="sidebar" />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
@@ -156,8 +140,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-1 h-4" />
           <span className="text-sm font-medium">{current?.label ?? "Dashboard"}</span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <NewProjectDialog />
+            <ProfileMenu variant="header" />
           </div>
         </header>
         <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 p-4 sm:p-6 lg:p-8">{children}</div>

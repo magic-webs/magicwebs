@@ -1,22 +1,29 @@
 "use client"
 
 import { formatDistanceToNow } from "date-fns"
-import { Bot, Copy, History, MousePointerClick, Plug, Rocket } from "lucide-react"
 import Link from "next/link"
 
 import type { ActivityItem } from "@magicwebs/backend/convex/dashboard"
 
+import {
+  BotIcon,
+  CopyIcon,
+  PaintBrushIcon,
+  RefreshIcon,
+  RocketIcon,
+  ServerIcon,
+} from "@/components/icons"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 import { SOURCE_LABELS } from "./lib"
 
 const SOURCE_ICONS = {
-  editor: MousePointerClick,
-  ai: Bot,
-  mcp: Plug,
-  clone: Copy,
-  rollback: History,
+  editor: PaintBrushIcon,
+  ai: BotIcon,
+  mcp: ServerIcon,
+  clone: CopyIcon,
+  rollback: RefreshIcon,
 }
 
 const SOURCE_TINTS = {
@@ -31,14 +38,14 @@ export function ActivityFeed({ items, compact }: { items: ActivityItem[]; compac
   return (
     <ol className="flex flex-col">
       {items.map((item) => {
-        const Icon = item.kind === "publish" ? Rocket : SOURCE_ICONS[item.source]
+        const Icon = item.kind === "publish" ? RocketIcon : SOURCE_ICONS[item.source]
         const tint =
           item.kind === "publish" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : SOURCE_TINTS[item.source]
         return (
           <li key={item.id} className="relative flex gap-3 pb-5 last:pb-0">
             <span className="absolute top-8 bottom-0 left-4 w-px bg-border [li:last-child_&]:hidden" />
             <span className={cn("relative grid size-8 shrink-0 place-items-center rounded-full", tint)}>
-              <Icon className="size-4" />
+              <Icon solid className="size-4" />
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-0.5 pt-1">
               <p className="text-sm">

@@ -8,6 +8,12 @@ import { mutation, query } from "./_generated/server"
 import { ownedProject, requireProject, requireUser, sitesRootDomain, slugify, viewerProjects } from "./lib"
 import { aiEffort, aiMode, aiModel } from "./models"
 
+// Subdomains of SITES_ROOT_DOMAIN the platform itself uses (DNS-only records
+// that bypass the edge worker), so a project slug must never take one.
+const RESERVED_SLUGS = new Set([
+  "www", "app", "api", "build", "build-api", "crawler", "admin", "dashboard", "assets", "files", "sites", "mail", "status", "docs",
+])
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -52,7 +58,10 @@ export const create = mutation({
 
     const base = slugify(url.hostname)
     let slug = base
-    while (await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", slug)).first()) {
+    while (
+      RESERVED_SLUGS.has(slug) ||
+      (await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", slug)).first())
+    ) {
       slug = `${base}-${Math.random().toString(36).slice(2, 6)}`
     }
 

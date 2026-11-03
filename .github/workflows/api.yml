@@ -1,0 +1,46 @@
+name: API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/api/**
+      - deploy/api/**
+      - packages/backend/**
+      - packages/page-schema/**
+      - package.json
+      - bun.lock
+      - tsconfig.base.json
+      - .github/workflows/api.yml
+      - .github/workflows/deploy-vps.yml
+  pull_request:
+    paths:
+      - apps/api/**
+      - deploy/api/**
+      - packages/backend/**
+      - packages/page-schema/**
+      - package.json
+      - bun.lock
+      - tsconfig.base.json
+      - .github/workflows/api.yml
+      - .github/workflows/deploy-vps.yml
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Commit SHA of an earlier image to redeploy (rollback). Leave empty to build and deploy the selected branch.
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/deploy-vps.yml
+    with:
+      service: api
+      package: "@magicwebs/api"
+      dockerfile: apps/api/Dockerfile
+      tag: ${{ inputs.tag || '' }}
+    secrets: inherit

@@ -1,7 +1,7 @@
-# Production stack on the VPS, deployed by .github/workflows/crawler.yml to
-# /opt/magicwebs/crawler/docker-compose.yml. It runs the image CI pushed to GHCR.
+# Crawler workers on the VPS, at /opt/magicwebs/crawler. Deployed by
+# .github/workflows/crawler.yml, which uploads this folder.
 #
-#   .env          CRAWLER_TAG=<commit sha>, written by each deploy
+#   .env          IMAGE_TAG=<commit sha>, written by each deploy
 #   crawler.env   the crawler's secrets, kept only on the VPS
 #
 # Workers pull jobs from Convex and open no ports, so scaling is raising `replicas`.
@@ -9,7 +9,7 @@ name: magicwebs-crawler
 
 services:
   crawler:
-    image: ghcr.io/magic-webs/magicwebs-crawler:${CRAWLER_TAG:-latest}
+    image: ghcr.io/magic-webs/magicwebs-crawler:${IMAGE_TAG:-latest}
     env_file: crawler.env
     restart: unless-stopped
     init: true

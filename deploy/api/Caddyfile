@@ -1,0 +1,9 @@
+# The DNS record for this name must point at the VPS with the Cloudflare proxy
+# off (DNS only), so Let's Encrypt can reach Caddy and the edge worker's
+# *.magicwebs.ai route does not catch it.
+build-api.magicwebs.ai {
+	reverse_proxy api:8787 {
+		# Pass AI chat and MCP streams through as they are written.
+		flush_interval -1
+	}
+}

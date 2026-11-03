@@ -1,0 +1,53 @@
+# API (AI chat + MCP) on the VPS, at /opt/magicwebs/api. Deployed by
+# .github/workflows/api.yml, which uploads this folder.
+#
+#   .env       IMAGE_TAG=<commit sha>, written by each deploy
+#   api.env    the API's secrets, kept only on the VPS
+#   Caddyfile  HTTPS for the API's domain, certificates issued automatically
+name: magicwebs-api
+
+services:
+  api:
+    image: ghcr.io/magic-webs/magicwebs-api:${IMAGE_TAG:-latest}
+    env_file: api.env
+    environment:
+      PORT: "8787"
+    restart: unless-stopped
+    init: true
+    expose:
+      - "8787"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8787/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      start_interval: 2s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging: *logging
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# One-time setup of a fresh Ubuntu VPS (Hostinger) to run the crawler.
+# One-time setup of a fresh Ubuntu VPS (Hostinger) for the crawler and the API.
 # Safe to re-run. Run as root, passing the public half of the CI deploy key:
 #
-#   ssh root@<vps> "bash -s -- '$(cat ~/.ssh/magicwebs_deploy.pub)'" < scripts/vps/bootstrap-crawler.sh
+#   ssh root@<vps> "bash -s -- '$(cat ~/.ssh/magicwebs_deploy.pub)'" < deploy/bootstrap.sh
 #
 # Installs Docker, creates a `deploy` user that CI logs in as, prepares
-# /opt/magicwebs/crawler, turns on the firewall (SSH only, the crawler opens no
-# ports), automatic security updates, fail2ban and a swap file.
+# /opt/magicwebs/<service> for each service, turns on the firewall (SSH and
+# HTTP/HTTPS for Caddy), automatic security updates, fail2ban and a swap file.
 set -euo pipefail
 
 DEPLOY_USER=deploy
-DEPLOY_DIR=/opt/magicwebs/crawler
+SERVICES=(crawler api)
 DEPLOY_PUBKEY="${1:-}"
 
 if [ "$(id -u)" -ne 0 ]; then echo "Run as root" >&2; exit 1; fi
@@ -53,18 +53,26 @@ grep -qxF "$DEPLOY_PUBKEY" "/home/$DEPLOY_USER/.ssh/authorized_keys" \
 chown "$DEPLOY_USER:$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh/authorized_keys"
 chmod 600 "/home/$DEPLOY_USER/.ssh/authorized_keys"
 
-echo "==> Deploy directory"
-install -d -m 750 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$DEPLOY_DIR"
-if [ ! -f "$DEPLOY_DIR/crawler.env" ]; then
-  install -m 600 -o "$DEPLOY_USER" -g "$DEPLOY_USER" /dev/null "$DEPLOY_DIR/crawler.env"
-fi
+echo "==> Deploy directories"
+install -d -m 755 /opt/magicwebs
+for service in "${SERVICES[@]}"; do
+  dir="/opt/magicwebs/$service"
+  install -d -m 750 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$dir"
+  if [ ! -f "$dir/$service.env" ]; then
+    install -m 600 -o "$DEPLOY_USER" -g "$DEPLOY_USER" /dev/null "$dir/$service.env"
+  fi
+done
 
 echo "==> Firewall"
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow OpenSSH
+# Caddy (API stack) serves HTTPS and answers Let's Encrypt on port 80. Docker's
+# own iptables rules publish these regardless; the rules keep ufw's view honest.
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow 443/udp
 ufw --force enable
-# Docker's own iptables rules bypass ufw for published ports; the crawler publishes none.
 
 echo "==> fail2ban and automatic security updates"
 systemctl enable --now fail2ban
@@ -80,4 +88,4 @@ if ! swapon --show | grep -q .; then
 fi
 
 echo
-echo "Done. Next: fill in $DEPLOY_DIR/crawler.env (see apps/crawler/.env.example), then push to main."
+echo "Done. Next: fill in /opt/magicwebs/<service>/<service>.env for each service (see deploy/README.md)."

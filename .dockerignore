@@ -1,0 +1,8 @@
+# Keep secrets and host-built dependencies out of images
+**/node_modules
+**/.env*
+!**/.env.example
+**/.next
+**/.wrangler
+**/*.tsbuildinfo
+.git

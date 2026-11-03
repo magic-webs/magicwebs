@@ -9,7 +9,8 @@ import { handleMcp } from "./mcp"
 
 const app = new Hono()
 
-app.use(logger())
+// /mcp/<key> carries an API key in the path, so it is masked before logging.
+app.use(logger((line, ...rest) => console.log(line.replace(/\/mcp\/[^\s?/]+/g, "/mcp/***"), ...rest)))
 app.get("/health", (c) => c.json({ ok: true }))
 
 // The platform UI sends its Convex Auth session token.
@@ -33,6 +34,15 @@ app.all("/mcp", async (c) => {
       "WWW-Authenticate": 'Bearer realm="magicwebs"',
     })
   }
+  return handleMcp(c.req.raw, convex)
+})
+
+// For clients that can't send headers (ChatGPT's custom MCP servers offer only
+// OAuth or no auth): the key is the last path segment instead. Anyone who has
+// this URL acts as the key's owner, so it is shown and treated like the key.
+app.all("/mcp/:key", async (c) => {
+  const convex = await clientForApiKey(c.req.param("key"))
+  if (!convex) return c.json({ error: "Unknown or revoked Magicwebs API key in the URL" }, 401)
   return handleMcp(c.req.raw, convex)
 })
 

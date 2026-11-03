@@ -42,6 +42,17 @@ const CLIENTS = [
       { label: "Or commit it to .mcp.json", code: jsonConfig("mcpServers") },
     ],
   },
+  {
+    id: "chatgpt",
+    label: "ChatGPT",
+    steps: [
+      {
+        label:
+          "Settings → Plugins → Add → Custom MCP server. Choose “No authentication” and paste this URL with your key at the end. Keep it private: the URL works like the key.",
+        code: `${MCP_URL}/<your key>`,
+      },
+    ],
+  },
   { id: "cursor", label: "Cursor", steps: [{ label: ".cursor/mcp.json", code: jsonConfig("mcpServers") }] },
   { id: "vscode", label: "VS Code", steps: [{ label: ".vscode/mcp.json", code: jsonConfig("servers") }] },
   {

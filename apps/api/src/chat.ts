@@ -27,6 +27,8 @@ const CHAT_MODEL = "anthropic/claude-haiku-5.5"
  */
 const ChatRequest = z.object({
   projectId: z.string(),
+  /** The page open in the editor; the chat edits that page. */
+  path: z.string().optional(),
   message: z.object({ id: z.string(), role: z.literal("user"), parts: z.array(z.any()) }).passthrough(),
   selectedId: z.string().nullish(),
 })
@@ -37,7 +39,9 @@ type ChatMessage = UIMessage<ChatMetadata>
 
 const INSTRUCTIONS = `You edit a landing page for the user. The page is a JSON document of ordered sections rendered by a fixed component registry (section types: ${SECTION_TYPES.join(", ")}), plus a global theme. Every edit you make appears in the user's live preview immediately.
 
-Each user message ends with a <page_context> block: the page outline (index. [id] type — heading) at the moment the message was sent, and the section the user has selected in the preview, if any. "This section", "here" and "it" usually mean the selected section. Outlines in earlier messages may be out of date; trust the latest one, and call get_page_outline after you add, remove or move sections.
+The project may be a site of several pages. You edit the page the user has open in the editor, named in <page_context>; to change another page, ask the user to open it. Shared parts such as headers and footers are copies on each page, so changing one page doesn't change the others.
+
+Each user message ends with a <page_context> block: the open page, the site's pages, the page outline (index. [id] type — heading) at the moment the message was sent, and the section the user has selected in the preview, if any. "This section", "here" and "it" usually mean the selected section. Outlines in earlier messages may be out of date; trust the latest one, and call get_page_outline after you add, remove or move sections.
 
 How to work:
 - Use the tools to change the page; never just describe JSON to the user.
@@ -52,10 +56,14 @@ How to work:
 
 const EPHEMERAL = { anthropic: { cacheControl: { type: "ephemeral" } } }
 
-function pageContext(doc: PageDoc, selectedId: string | null | undefined): string {
+type SitePage = { path: string; title: string }
+
+function pageContext(doc: PageDoc, selectedId: string | null | undefined, page: SitePage, pages: SitePage[]): string {
   const selected = selectedId ? doc.sections.find((s) => s.id === selectedId) : undefined
   return [
     "<page_context>",
+    `Open page: ${page.title} (${page.path})`,
+    ...(pages.length > 1 ? [`Site pages: ${pages.map((p) => `${p.title} (${p.path})`).join(", ")}`] : []),
     `Outline:\n${outline(doc) || "(no sections yet)"}`,
     selected ? `Selected section: [${selected.id}] ${selected.type}` : "No section selected.",
     "</page_context>",
@@ -110,8 +118,13 @@ export async function handleChat(request: Request, convex: ConvexHttpClient): Pr
   if (!body.success) return Response.json({ error: "Invalid request" }, { status: 400 })
 
   const projectId = body.data.projectId as Id<"projects">
-  const draft = await convex.query(api.drafts.get, { projectId }).catch(() => null)
-  if (!draft) return Response.json({ error: "Project not found" }, { status: 404 })
+  const path = body.data.path ?? "/"
+  const [draft, pages] = await Promise.all([
+    convex.query(api.drafts.get, { projectId, path }).catch(() => null),
+    convex.query(api.pages.list, { projectId }).catch(() => []),
+  ])
+  if (!draft) return Response.json({ error: "Page not found" }, { status: 404 })
+  const page = pages.find((p) => p.path === path) ?? { path, title: path === "/" ? "Home" : path }
 
   let history = (await convex.query(api.chats.list, { projectId })) as ChatMessage[]
   // A retried message is already stored: answer it again from where it was.
@@ -121,7 +134,7 @@ export async function handleChat(request: Request, convex: ConvexHttpClient): Pr
 
   const userMessage: ChatMessage = {
     ...(body.data.message as ChatMessage),
-    metadata: { context: pageContext(draft.doc, body.data.selectedId) },
+    metadata: { context: pageContext(draft.doc, body.data.selectedId, page, pages) },
   }
   const messages = [...history, userMessage]
 
@@ -133,7 +146,7 @@ export async function handleChat(request: Request, convex: ConvexHttpClient): Pr
         inputSchema: def.input,
         execute: async (input: Record<string, unknown>) => {
           try {
-            return await def.run(convex, projectId, input, "ai")
+            return await def.run(convex, { projectId, path }, input, "ai")
           } catch (error) {
             return { ok: false, error: errorMessage(error) }
           }

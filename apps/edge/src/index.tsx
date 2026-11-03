@@ -1,8 +1,9 @@
-import type { PageDoc } from "@magicwebs/page-schema"
+import { HOME_PATH, pagePath, rewriteSiteLinks, type PageDoc, type SitePage } from "@magicwebs/page-schema"
 import { renderPage } from "@magicwebs/renderer/server"
 
-// One Worker serves every published page. The hostname selects the project,
-// Convex says which version is live, and React renders it to HTML. Asking
+// One Worker serves every published site. The hostname selects the project,
+// the path selects the page, Convex says which version is live, and React
+// renders it to HTML. Asking
 // Convex makes a publish live within seconds; Workers KV (written on every
 // publish) is the fallback when Convex can't be reached.
 
@@ -12,9 +13,14 @@ type Env = {
   CONVEX_SITE_URL?: string
 }
 
+type PublishedPage = SitePage & { title?: string }
+
 type PublishedSite = {
   version: number
   publishedAt: number
+  /** Missing on sites published before multi-page sites: then the site is one home page. */
+  pages?: PublishedPage[]
+  /** The home page. */
   doc: PageDoc
 }
 
@@ -29,7 +35,7 @@ const HTML_HEADERS = {
 }
 
 /** Bump when the rendered HTML changes shape, so cached renders are rebuilt. */
-const RENDER_REVISION = 5
+const RENDER_REVISION = 6
 
 /** How often an open page checks for a newer published version. */
 const LIVE_RELOAD_INTERVAL_MS = 4000
@@ -49,7 +55,7 @@ function notFound(message: string) {
   )
 }
 
-type LiveVersion = { projectId: string; version: number; publishedAt: number }
+type LiveVersion = { projectId: string; version: number; publishedAt: number; pages?: PublishedPage[] }
 
 async function cachedJson<T>(url: string, ctx: ExecutionContext): Promise<T | null> {
   const cache = caches.default
@@ -89,13 +95,18 @@ async function loadSite(
   return site ? { projectId, site } : null
 }
 
-/** The page for a version: from the lookup itself (KV), from Convex, or from KV as a last resort. */
-async function loadDoc(env: Env, projectId: string, site: PublishedSite | LiveVersion, ctx: ExecutionContext) {
-  if ("doc" in site) return site.doc
+async function kvPage(env: Env, projectId: string, path: string): Promise<PageDoc | null> {
+  if (path === HOME_PATH) return (await env.SITES.get<PublishedSite>(`site:${projectId}`, "json"))?.doc ?? null
+  return (await env.SITES.get<{ doc: PageDoc }>(`page:${projectId}:${path}`, "json"))?.doc ?? null
+}
+
+/** A page of a version: from the lookup itself (KV), from Convex, or from KV as a last resort. */
+async function loadDoc(env: Env, projectId: string, site: PublishedSite | LiveVersion, path: string, ctx: ExecutionContext) {
+  if ("doc" in site) return path === HOME_PATH ? site.doc : kvPage(env, projectId, path)
   if (env.CONVEX_SITE_URL) {
     try {
       const doc = await cachedJson<PageDoc>(
-        `${env.CONVEX_SITE_URL}/edge/doc?projectId=${projectId}&version=${site.version}`,
+        `${env.CONVEX_SITE_URL}/edge/doc?projectId=${projectId}&version=${site.version}&path=${encodeURIComponent(path)}`,
         ctx,
       )
       if (doc) return doc
@@ -103,8 +114,15 @@ async function loadDoc(env: Env, projectId: string, site: PublishedSite | LiveVe
       console.error("Convex doc fetch failed, using KV:", error)
     }
   }
-  const stored = await env.SITES.get<PublishedSite>(`site:${projectId}`, "json")
-  return stored?.doc ?? null
+  return kvPage(env, projectId, path)
+}
+
+function sitePages(site: PublishedSite | LiveVersion): PublishedPage[] {
+  return site.pages?.length ? site.pages : [{ path: HOME_PATH, source: "" }]
+}
+
+function escapeXml(value: string) {
+  return value.replace(/[<>&'"]/g, (c) => `&#${c.charCodeAt(0)};`)
 }
 
 export default {
@@ -125,34 +143,52 @@ export default {
     if (!found) return notFound("This site hasn't been published yet.")
     const { projectId, site } = found
 
+    const pages = sitePages(site)
     if (url.pathname === "/sitemap.xml") {
       const lastmod = new Date(site.publishedAt).toISOString()
+      const urls = pages
+        .map((p) => `<url><loc>${escapeXml(`https://${hostname}${p.path}`)}</loc><lastmod>${lastmod}</lastmod></url>`)
+        .join("")
       return new Response(
-        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://${hostname}/</loc><lastmod>${lastmod}</lastmod></url></urlset>`,
+        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`,
         { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" } },
       )
     }
     if (url.pathname === "/__version") {
       return Response.json({ version: site.version }, { headers: { "Cache-Control": "no-store" } })
     }
-    if (url.pathname !== "/") return notFound("Page not found.")
+    let path: string
+    try {
+      path = pagePath(decodeURI(url.pathname))
+    } catch {
+      return notFound("Page not found.")
+    }
+    if (!pages.some((p) => p.path === path)) return notFound("Page not found.")
+    // One canonical address per page: /about/ redirects to /about.
+    if (url.pathname !== path && encodeURI(path) !== url.pathname) {
+      return Response.redirect(`https://${hostname}${encodeURI(path)}${url.search}`, 301)
+    }
 
     // The version is part of the cache key, so a new version is rendered fresh
     // without purging anything.
     const cache = caches.default
-    const cacheKey = new Request(`https://render.cache/r${RENDER_REVISION}/${projectId}/v${site.version}/${hostname}`)
+    const cacheKey = new Request(
+      `https://render.cache/r${RENDER_REVISION}/${projectId}/v${site.version}/${hostname}${encodeURI(path)}`,
+    )
     const cached = await cache.match(cacheKey)
     if (cached) return cached
 
-    const doc = await loadDoc(env, projectId, site, ctx)
-    if (!doc) return notFound("This site hasn't been published yet.")
-    const stream = await renderPage(doc, { url: `https://${hostname}/` })
+    const stored = await loadDoc(env, projectId, site, path, ctx)
+    if (!stored) return notFound("This site hasn't been published yet.")
+    // Links between the cloned pages point at the clone's own paths.
+    const doc = pages.length > 1 ? rewriteSiteLinks(stored, pages.filter((p) => p.source)) : stored
+    const stream = await renderPage(doc, { url: `https://${hostname}${encodeURI(path)}` })
     const rendered = await new Response(stream).text()
     const script = liveReloadScript(site.version)
     const bodyEnd = rendered.lastIndexOf("</body>")
     const html = bodyEnd < 0 ? rendered + script : rendered.slice(0, bodyEnd) + script + rendered.slice(bodyEnd)
     const response = new Response(html, {
-      headers: { ...HTML_HEADERS, ETag: `"${projectId}-v${site.version}"` },
+      headers: { ...HTML_HEADERS, ETag: `"${projectId}-v${site.version}-${encodeURIComponent(path)}"` },
     })
     ctx.waitUntil(cache.put(cacheKey, response.clone()))
     return response

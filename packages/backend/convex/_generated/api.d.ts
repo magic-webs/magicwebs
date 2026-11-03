@@ -22,6 +22,7 @@ import type * as jobs from "../jobs.js";
 import type * as lib from "../lib.js";
 import type * as migrations from "../migrations.js";
 import type * as models from "../models.js";
+import type * as pages from "../pages.js";
 import type * as projects from "../projects.js";
 import type * as rebuilds from "../rebuilds.js";
 import type * as users from "../users.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   lib: typeof lib;
   migrations: typeof migrations;
   models: typeof models;
+  pages: typeof pages;
   projects: typeof projects;
   rebuilds: typeof rebuilds;
   users: typeof users;

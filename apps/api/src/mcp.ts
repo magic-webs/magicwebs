@@ -5,7 +5,7 @@ import { z } from "zod"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
-import { PageDocSchema, REBUILD_RULES } from "@magicwebs/page-schema"
+import { MAX_SITE_PAGES, PageDocSchema, REBUILD_RULES } from "@magicwebs/page-schema"
 
 import { errorMessage, PAGE_TOOLS } from "./tools"
 
@@ -22,11 +22,16 @@ function failure(error: unknown) {
   return { ...text(errorMessage(error)), isError: true }
 }
 
-const SUBMIT_INSTRUCTIONS = `When the page is ready, call submit_rebuilt_page with this project's projectId and the page document as \`doc\`. It must match this JSON Schema:
+const SUBMIT_INSTRUCTIONS = `When the page is ready, call submit_rebuilt_page with this project's projectId, the page's path as \`page\` and the page document as \`doc\`. It must match this JSON Schema:
 ${JSON.stringify(z.toJSONSchema(PageDocSchema))}`
 
+const PAGE_ARG = z
+  .string()
+  .optional()
+  .describe('Path of the page in the project\'s site, e.g. "/about" (see list_pages). Defaults to the home page "/".')
+
 function buildServer(convex: ConvexHttpClient): McpServer {
-  const server = new McpServer({ name: "magicwebs", version: "0.2.0" })
+  const server = new McpServer({ name: "magicwebs", version: "0.3.0" })
 
   server.registerTool(
     "list_projects",
@@ -51,16 +56,88 @@ function buildServer(convex: ConvexHttpClient): McpServer {
   )
 
   server.registerTool(
+    "discover_pages",
+    {
+      description: `Find the pages of the site a URL belongs to, from the page's links and the site's sitemap: the page itself first, then the pages it links to (menus first). Use it before clone_landing_page to offer the user which pages to clone; a site holds up to ${MAX_SITE_PAGES}.`,
+      inputSchema: z.object({ url: z.string() }),
+    },
+    async ({ url }) => {
+      try {
+        return text(await convex.action(api.pages.discover, { url }))
+      } catch (error) {
+        return failure(error)
+      }
+    },
+  )
+
+  server.registerTool(
     "clone_landing_page",
     {
-      description:
-        "Clone a public landing page URL into a new editable project. Cloning runs in the background; poll list_projects. Most pages are copied exactly. If a page is too large to copy, it is not rebuilt with Magicwebs' AI: its step says it is waiting for your agent, and you rebuild it yourself with get_rebuild_brief and submit_rebuilt_page.",
-      inputSchema: z.object({ url: z.string(), name: z.string().optional() }),
+      description: `Clone a public page URL, and optionally more pages of the same site (\`pages\`, URLs from discover_pages), into a new editable site. The URL becomes the home page "/"; other pages keep their paths, and links between cloned pages point at the clone. At most ${MAX_SITE_PAGES} pages. Cloning runs in the background; poll list_pages or list_projects. Most pages are copied exactly. If a page is too large to copy, it is not rebuilt with Magicwebs' AI: its step says it is waiting for your agent, and you rebuild it yourself with get_rebuild_brief and submit_rebuilt_page.`,
+      inputSchema: z.object({ url: z.string(), name: z.string().optional(), pages: z.array(z.string()).optional() }),
     },
-    async ({ url, name }) => {
+    async ({ url, name, pages }) => {
       try {
-        const projectId = await convex.mutation(api.projects.create, { url, name, ai: "agent" })
+        const projectId = await convex.mutation(api.projects.create, {
+          url,
+          name,
+          ai: "agent",
+          pages: pages?.map((page) => ({ url: page })),
+        })
         return text({ projectId, status: "cloning" })
+      } catch (error) {
+        return failure(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    "list_pages",
+    {
+      description:
+        "List the pages of a project's site: path, title, original URL and cloning status. Pass a page's path as `page` to the editing tools to edit it.",
+      inputSchema: z.object({ projectId: z.string() }),
+    },
+    async ({ projectId }) => {
+      try {
+        return text(await convex.query(api.pages.list, { projectId: projectId as Id<"projects"> }))
+      } catch (error) {
+        return failure(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    "add_pages",
+    {
+      description: `Clone more pages of the original site (URLs, e.g. from discover_pages) into an existing project. Pages already in it are skipped; a site holds up to ${MAX_SITE_PAGES} pages.`,
+      inputSchema: z.object({ projectId: z.string(), urls: z.array(z.string()) }),
+    },
+    async ({ projectId, urls }) => {
+      try {
+        return text(
+          await convex.mutation(api.pages.add, {
+            projectId: projectId as Id<"projects">,
+            pages: urls.map((url) => ({ url })),
+            ai: "agent",
+          }),
+        )
+      } catch (error) {
+        return failure(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    "remove_page",
+    {
+      description: 'Remove a page from a project\'s site. The home page ("/") can\'t be removed.',
+      inputSchema: z.object({ projectId: z.string(), page: z.string() }),
+    },
+    async ({ projectId, page }) => {
+      try {
+        await convex.mutation(api.pages.remove, { projectId: projectId as Id<"projects">, path: page })
+        return text({ ok: true })
       } catch (error) {
         return failure(error)
       }
@@ -72,11 +149,11 @@ function buildServer(convex: ConvexHttpClient): McpServer {
     {
       description:
         "For a cloned page too large to copy exactly: get screenshots of the original (desktop slices top to bottom, then mobile), its captured structure, and the rules for rebuilding it as a page document with your own model. Then call submit_rebuilt_page.",
-      inputSchema: z.object({ projectId: z.string() }),
+      inputSchema: z.object({ projectId: z.string(), page: PAGE_ARG }),
     },
-    async ({ projectId }) => {
+    async ({ projectId, page }) => {
       try {
-        const brief = await convex.query(api.rebuilds.brief, { projectId: projectId as Id<"projects"> })
+        const brief = await convex.query(api.rebuilds.brief, { projectId: projectId as Id<"projects">, path: page })
         if (!brief) return failure("This project isn't waiting for a rebuild. Check its status with list_projects.")
         const images = await Promise.all(
           brief.screenshots.map(async (url) => {
@@ -88,7 +165,7 @@ function buildServer(convex: ConvexHttpClient): McpServer {
         )
         return {
           content: [
-            { type: "text" as const, text: `${REBUILD_RULES}\n${SUBMIT_INSTRUCTIONS}` },
+            { type: "text" as const, text: `Page: ${brief.path}\n${REBUILD_RULES}\n${SUBMIT_INSTRUCTIONS}` },
             ...images,
             { type: "text" as const, text: brief.text },
           ],
@@ -104,11 +181,11 @@ function buildServer(convex: ConvexHttpClient): McpServer {
     {
       description:
         "Save the page document you rebuilt from get_rebuild_brief. It replaces the project's draft and marks the project ready to edit.",
-      inputSchema: z.object({ projectId: z.string(), doc: z.record(z.string(), z.any()) }),
+      inputSchema: z.object({ projectId: z.string(), page: PAGE_ARG, doc: z.record(z.string(), z.any()) }),
     },
-    async ({ projectId, doc }) => {
+    async ({ projectId, page, doc }) => {
       try {
-        return text(await convex.mutation(api.rebuilds.submit, { projectId: projectId as Id<"projects">, doc }))
+        return text(await convex.mutation(api.rebuilds.submit, { projectId: projectId as Id<"projects">, path: page, doc }))
       } catch (error) {
         return failure(error)
       }
@@ -118,11 +195,12 @@ function buildServer(convex: ConvexHttpClient): McpServer {
   for (const [name, def] of Object.entries(PAGE_TOOLS)) {
     server.registerTool(
       name,
-      { description: def.description, inputSchema: def.input.extend({ projectId: z.string() }) },
+      { description: def.description, inputSchema: def.input.extend({ projectId: z.string(), page: PAGE_ARG }) },
       async (input: Record<string, unknown>) => {
-        const { projectId, ...rest } = input
+        const { projectId, page, ...rest } = input
         try {
-          return text(await def.run(convex, projectId as Id<"projects">, rest, "mcp"))
+          const target = { projectId: projectId as Id<"projects">, path: (page as string | undefined) ?? "/" }
+          return text(await def.run(convex, target, rest, "mcp"))
         } catch (error) {
           return failure(error)
         }

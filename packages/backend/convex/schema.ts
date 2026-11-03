@@ -46,12 +46,38 @@ export default defineSchema({
     .index("by_slug", ["slug"])
     .index("by_user", ["userId"]),
 
+  /**
+   * The pages of a project's site, without their documents (those are in
+   * drafts), so listing pages stays cheap. Projects made before sites had
+   * several pages have no rows here; their single draft is the home page.
+   */
+  pages: defineTable({
+    projectId: v.id("projects"),
+    /** Where the clone serves the page: "/" for the home page, else e.g. "/about". */
+    path: v.string(),
+    title: v.string(),
+    /** The original page this one is cloned from. */
+    sourceUrl: v.string(),
+    status: v.union(v.literal("cloning"), v.literal("ready"), v.literal("failed")),
+    step: v.optional(v.string()),
+    error: v.optional(v.string()),
+    /** Position in the page list; the home page is 0. */
+    order: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_project", ["projectId", "order"])
+    .index("by_project_path", ["projectId", "path"]),
+
+  /** The editable document of one page. A draft without `path` (older projects) is the home page. */
   drafts: defineTable({
     projectId: v.id("projects"),
+    path: v.optional(v.string()),
     doc: v.any(),
     revision: v.number(),
     updatedAt: v.number(),
-  }).index("by_project", ["projectId"]),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_path", ["projectId", "path"]),
 
   edits: defineTable({
     projectId: v.id("projects"),
@@ -59,19 +85,32 @@ export default defineSchema({
     source: v.union(v.literal("editor"), v.literal("ai"), v.literal("mcp"), v.literal("clone"), v.literal("rollback")),
     ops: v.array(v.any()),
     results: v.array(v.string()),
+    /** The page edited; missing means the home page. */
+    path: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_project", ["projectId"]),
 
   versions: defineTable({
     projectId: v.id("projects"),
     number: v.number(),
+    /** The home page. */
     doc: v.any(),
+    /**
+     * Every page of the site at this version. Each page is a snapshot: the
+     * hash of its stored document in the blobs table, so unchanged pages are
+     * shared between versions. Missing on versions from before multi-page sites.
+     */
+    pages: v.optional(
+      v.array(v.object({ path: v.string(), title: v.string(), sourceUrl: v.string(), snapshot: v.string() })),
+    ),
     note: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_project", ["projectId", "number"]),
 
   jobs: defineTable({
     projectId: v.id("projects"),
+    /** The page this job clones; missing means the home page. */
+    path: v.optional(v.string()),
     url: v.string(),
     model: v.optional(aiModel),
     effort: v.optional(aiEffort),
@@ -101,6 +140,8 @@ export default defineSchema({
   rebuildBriefs: defineTable({
     projectId: v.id("projects"),
     jobId: v.id("jobs"),
+    /** The page being rebuilt; missing means the home page. */
+    path: v.optional(v.string()),
     url: v.string(),
     screenshots: v.array(v.id("_storage")),
     text: v.string(),

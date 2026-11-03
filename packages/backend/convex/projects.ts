@@ -1,11 +1,12 @@
 import { ConvexError, v } from "convex/values"
 
-import { emptyPageDoc } from "@magicwebs/page-schema"
+import { HOME_PATH, MAX_SITE_PAGES } from "@magicwebs/page-schema"
 
 import { internal } from "./_generated/api"
 import { deleteChat } from "./chats"
 import { mutation, query } from "./_generated/server"
-import { ownedProject, requireProject, requireUser, sitesRootDomain, slugify, viewerProjects } from "./lib"
+import { ensurePages, listPages, ownedProject, requireProject, requireUser, setPageState, sitesRootDomain, syncProjectStatus, slugify, viewerProjects } from "./lib"
+import { insertPages } from "./pages"
 import { aiEffort, aiMode, aiModel } from "./models"
 
 // Subdomains of SITES_ROOT_DOMAIN the platform itself uses (DNS-only records
@@ -32,9 +33,11 @@ export const get = query({
 })
 
 /**
- * Create a project from a public URL and queue it to be rebuilt. Agents pass
- * `ai: "agent"` so a page too large to copy is handed back to them to rebuild
- * with their own model instead of the platform's.
+ * Create a project from a public URL and queue its pages to be cloned. `pages`
+ * are the pages of the same site to clone with it (from pages.discover); the
+ * URL itself is always the home page. Agents pass `ai: "agent"` so a page too
+ * large to copy is handed back to them to rebuild with their own model
+ * instead of the platform's.
  */
 export const create = mutation({
   args: {
@@ -43,9 +46,11 @@ export const create = mutation({
     model: v.optional(aiModel),
     effort: v.optional(aiEffort),
     ai: v.optional(aiMode),
+    pages: v.optional(v.array(v.object({ url: v.string(), title: v.optional(v.string()) }))),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
+    if ((args.pages?.length ?? 0) + 1 > MAX_SITE_PAGES * 2) throw new ConvexError("Too many pages")
     let url: URL
     try {
       url = new URL(/^https?:\/\//i.test(args.url) ? args.url : `https://${args.url}`)
@@ -78,17 +83,10 @@ export const create = mutation({
       step: "Queued",
       createdAt: now,
     })
-    await ctx.db.insert("drafts", { projectId, doc: emptyPageDoc(name), revision: 0, updatedAt: now })
-    await ctx.db.insert("jobs", {
-      projectId,
-      url: url.toString(),
-      model: args.model,
-      effort: args.effort,
-      ai: args.ai,
-      status: "queued",
-      attempts: 0,
-      createdAt: now,
-    })
+    const project = (await ctx.db.get(projectId))!
+    const others = (args.pages ?? []).filter((p) => p.url !== url.toString())
+    await insertPages(ctx, project, [{ url: url.toString(), title: "Home" }, ...others], { now, ai: args.ai })
+    await syncProjectStatus(ctx, projectId)
     await ctx.db.insert("domains", {
       projectId,
       hostname: `${slug}.${sitesRootDomain()}`,
@@ -100,22 +98,32 @@ export const create = mutation({
   },
 })
 
-/** Run the cloner again against the original URL, replacing the draft. */
+/**
+ * Clone pages again from the original site, replacing their drafts: one page
+ * when `path` is given (e.g. retrying a failed page), else every page.
+ */
 export const reclone = mutation({
-  args: { projectId: v.id("projects"), ai: v.optional(aiMode) },
-  handler: async (ctx, { projectId, ai }) => {
+  args: { projectId: v.id("projects"), ai: v.optional(aiMode), path: v.optional(v.string()) },
+  handler: async (ctx, { projectId, ai, path }) => {
     const project = await requireProject(ctx, projectId)
-    await ctx.db.patch(projectId, { status: "cloning", step: "Queued", error: undefined })
-    await ctx.db.insert("jobs", {
-      projectId,
-      url: project.sourceUrl,
-      model: project.model,
-      effort: project.effort,
-      ai,
-      status: "queued",
-      attempts: 0,
-      createdAt: Date.now(),
-    })
+    await ensurePages(ctx, project)
+    const pages = (await listPages(ctx, project)).filter((p) => !path || p.path === path)
+    if (!pages.length) throw new ConvexError(`This site has no page ${path}`)
+    const now = Date.now()
+    for (const page of pages) {
+      await ctx.db.insert("jobs", {
+        projectId,
+        path: page.path,
+        url: page.sourceUrl,
+        model: project.model,
+        effort: project.effort,
+        ai,
+        status: "queued",
+        attempts: 0,
+        createdAt: now,
+      })
+      await setPageState(ctx, projectId, page.path, { status: "cloning", step: "Queued" })
+    }
   },
 })
 
@@ -154,6 +162,7 @@ export const remove = mutation({
     await ctx.scheduler.runAfter(0, internal.edge.removeSite, {
       projectId,
       hostnames: domains.filter((d) => d.kind === "subdomain").map((d) => d.hostname),
+      paths: (await listPages(ctx, project)).map((p) => p.path).filter((p) => p !== HOME_PATH),
     })
 
     const briefs = await ctx.db
@@ -164,7 +173,7 @@ export const remove = mutation({
       for (const file of brief.screenshots) await ctx.storage.delete(file)
     }
     await deleteChat(ctx, projectId)
-    for (const table of ["drafts", "edits", "versions", "jobs", "rebuildBriefs"] as const) {
+    for (const table of ["pages", "drafts", "edits", "versions", "jobs", "rebuildBriefs"] as const) {
       const rows = await ctx.db
         .query(table)
         .withIndex("by_project", (q) => q.eq("projectId", projectId))

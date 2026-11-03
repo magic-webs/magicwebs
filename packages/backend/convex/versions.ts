@@ -1,11 +1,22 @@
 import { ConvexError, v } from "convex/values"
 
-import { PageDocSchema } from "@magicwebs/page-schema"
+import { HOME_PATH, PageDocSchema } from "@magicwebs/page-schema"
 
 import { internal } from "./_generated/api"
-import type { Id } from "./_generated/dataModel"
+import type { Doc, Id } from "./_generated/dataModel"
 import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server"
-import { getDraft, loadDoc, ownedProject, requireProject } from "./lib"
+import {
+  ensurePages,
+  findDraft,
+  findPage,
+  getDraft,
+  listPages,
+  loadDoc,
+  loadSnapshot,
+  ownedProject,
+  requireProject,
+  snapshotDoc,
+} from "./lib"
 
 /** How long after the last edit the draft is published automatically. */
 const AUTO_PUBLISH_DELAY_MS = 1000
@@ -32,15 +43,25 @@ export const get = query({
   },
 })
 
-/** Snapshot the current draft as a new immutable version and make it live. */
+/**
+ * Snapshot every page's draft as a new immutable version of the site and make
+ * it live. Pages still being cloned for the first time are left out until they're ready.
+ */
 async function publishDraft(ctx: MutationCtx, projectId: Id<"projects">, note?: string) {
   const project = await ctx.db.get(projectId)
   if (!project) throw new ConvexError("Project not found")
-  const draft = await getDraft(ctx, projectId)
-  if (!PageDocSchema.safeParse(await loadDoc(ctx, draft.doc)).success) {
+  const home = await getDraft(ctx, projectId, HOME_PATH)
+  if (!PageDocSchema.safeParse(await loadDoc(ctx, home.doc)).success) {
     throw new ConvexError("The draft is not a valid page and can't be published")
   }
   if (project.autoPublishId) await ctx.scheduler.cancel(project.autoPublishId)
+
+  const pages: NonNullable<Doc<"versions">["pages"]> = []
+  for (const page of await listPages(ctx, project)) {
+    const draft = page.path === HOME_PATH ? home : await findDraft(ctx, projectId, page.path)
+    if (!draft || (draft.revision === 0 && page.path !== HOME_PATH)) continue
+    pages.push({ path: page.path, title: page.title, sourceUrl: page.sourceUrl, snapshot: await snapshotDoc(ctx, draft.doc) })
+  }
 
   const latest = await ctx.db
     .query("versions")
@@ -49,7 +70,7 @@ async function publishDraft(ctx: MutationCtx, projectId: Id<"projects">, note?: 
     .first()
   const number = (latest?.number ?? 0) + 1
   const now = Date.now()
-  const versionId = await ctx.db.insert("versions", { projectId, number, doc: draft.doc, note, createdAt: now })
+  const versionId = await ctx.db.insert("versions", { projectId, number, doc: home.doc, pages, note, createdAt: now })
   await ctx.db.patch(projectId, { publishedVersionId: versionId, publishedAt: now, autoPublishId: undefined })
   await ctx.scheduler.runAfter(0, internal.edge.syncSite, { projectId })
   return { versionId, number }
@@ -78,58 +99,76 @@ export async function scheduleAutoPublish(ctx: MutationCtx, projectId: Id<"proje
 export const autoPublish = internalMutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
-    const draft = await getDraft(ctx, projectId)
+    const draft = await findDraft(ctx, projectId, HOME_PATH)
     // An invalid draft stays unpublished; the editor still shows it as unpublished.
-    if (!PageDocSchema.safeParse(await loadDoc(ctx, draft.doc)).success) return
+    if (!draft || !PageDocSchema.safeParse(await loadDoc(ctx, draft.doc)).success) return
     await publishDraft(ctx, projectId, "Auto-published")
   },
 })
 
 /**
- * Make an earlier version live again and load it into the draft. The version
+ * Load every page of a version back into the drafts. Pages added since stay
+ * as they are; pages removed since come back.
+ */
+async function restoreVersion(ctx: MutationCtx, project: Doc<"projects">, version: Doc<"versions">, result: string) {
+  await ensurePages(ctx, project)
+  const now = Date.now()
+  const entries = version.pages ?? [{ path: HOME_PATH, title: "Home", sourceUrl: project.sourceUrl, snapshot: "" }]
+  let order = (await listPages(ctx, project)).reduce((max, p) => Math.max(max, p.order), 0)
+  for (const entry of entries) {
+    const stored = entry.snapshot ? await loadSnapshot(ctx, entry.snapshot) : version.doc
+    if (!(await findPage(ctx, project._id, entry.path))) {
+      await ctx.db.insert("pages", {
+        projectId: project._id,
+        path: entry.path,
+        title: entry.title,
+        sourceUrl: entry.sourceUrl,
+        status: "ready",
+        order: ++order,
+        createdAt: now,
+      })
+    }
+    const draft = await findDraft(ctx, project._id, entry.path)
+    const revision = (draft?.revision ?? 0) + 1
+    if (draft) await ctx.db.patch(draft._id, { doc: stored, revision, updatedAt: now })
+    else await ctx.db.insert("drafts", { projectId: project._id, path: entry.path, doc: stored, revision, updatedAt: now })
+    await ctx.db.insert("edits", {
+      projectId: project._id,
+      path: entry.path,
+      revision,
+      source: "rollback",
+      ops: [],
+      results: [result],
+      createdAt: now,
+    })
+  }
+  return now
+}
+
+/**
+ * Make an earlier version live again and load it into the drafts. The version
  * history itself is never rewritten, so a rollback can be rolled back too.
  */
 export const rollback = mutation({
   args: { projectId: v.id("projects"), versionId: v.id("versions") },
   handler: async (ctx, { projectId, versionId }) => {
-    await requireProject(ctx, projectId)
+    const project = await requireProject(ctx, projectId)
     const version = await ctx.db.get(versionId)
     if (!version || version.projectId !== projectId) throw new ConvexError("Version not found")
-    const draft = await getDraft(ctx, projectId)
-    const now = Date.now()
-    const revision = draft.revision + 1
-    await ctx.db.patch(draft._id, { doc: version.doc, revision, updatedAt: now })
-    await ctx.db.insert("edits", {
-      projectId,
-      revision,
-      source: "rollback",
-      ops: [],
-      results: [`Restored version ${version.number}`],
-      createdAt: now,
-    })
+    const now = await restoreVersion(ctx, project, version, `Restored version ${version.number}`)
     await ctx.db.patch(projectId, { publishedVersionId: versionId, publishedAt: now })
     await ctx.scheduler.runAfter(0, internal.edge.syncSite, { projectId })
   },
 })
 
-/** Load an earlier version into the draft without publishing it. */
+/** Load an earlier version into the drafts without publishing it. */
 export const restoreToDraft = mutation({
   args: { projectId: v.id("projects"), versionId: v.id("versions") },
   handler: async (ctx, { projectId, versionId }) => {
-    await requireProject(ctx, projectId)
+    const project = await requireProject(ctx, projectId)
     const version = await ctx.db.get(versionId)
     if (!version || version.projectId !== projectId) throw new ConvexError("Version not found")
-    const draft = await getDraft(ctx, projectId)
-    const now = Date.now()
-    await ctx.db.patch(draft._id, { doc: version.doc, revision: draft.revision + 1, updatedAt: now })
-    await ctx.db.insert("edits", {
-      projectId,
-      revision: draft.revision + 1,
-      source: "rollback",
-      ops: [],
-      results: [`Loaded version ${version.number} into the draft`],
-      createdAt: now,
-    })
+    await restoreVersion(ctx, project, version, `Loaded version ${version.number} into the draft`)
     await scheduleAutoPublish(ctx, projectId)
   },
 })

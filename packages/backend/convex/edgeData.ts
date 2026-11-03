@@ -1,8 +1,27 @@
 import { v } from "convex/values"
 
-import { internalQuery } from "./_generated/server"
-import { loadDoc } from "./lib"
+import { HOME_PATH, type SitePage } from "@magicwebs/page-schema"
 
+import type { Doc } from "./_generated/dataModel"
+import { internalQuery, type QueryCtx } from "./_generated/server"
+import { loadDoc, loadSnapshot } from "./lib"
+
+type PublishedPage = SitePage & { title: string }
+
+/** The pages a version serves. Versions from before multi-page sites are one home page. */
+function versionPages(project: Doc<"projects">, version: Doc<"versions">): PublishedPage[] {
+  if (!version.pages) return [{ path: HOME_PATH, title: "Home", source: project.sourceUrl }]
+  return version.pages.map((p) => ({ path: p.path, title: p.title, source: p.sourceUrl }))
+}
+
+/** One page of a version, ready to render. */
+async function versionPageDoc(ctx: QueryCtx, version: Doc<"versions">, path: string) {
+  if (path === HOME_PATH) return loadDoc(ctx, version.doc)
+  const entry = version.pages?.find((p) => p.path === path)
+  return entry ? loadDoc(ctx, await loadSnapshot(ctx, entry.snapshot)) : null
+}
+
+/** What Workers KV holds for a published site, without the pages' documents (see publishedPage). */
 export const publishedSite = internalQuery({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
@@ -17,9 +36,20 @@ export const publishedSite = internalQuery({
     return {
       version: version.number,
       publishedAt: project.publishedAt ?? version.createdAt,
-      doc: await loadDoc(ctx, version.doc),
+      pages: versionPages(project, version),
       hostnames: domains.filter((d) => d.status === "active").map((d) => d.hostname),
     }
+  },
+})
+
+/** One page of the live version, for Workers KV. */
+export const publishedPage = internalQuery({
+  args: { projectId: v.id("projects"), path: v.string() },
+  handler: async (ctx, { projectId, path }) => {
+    const project = await ctx.db.get(projectId)
+    if (!project?.publishedVersionId) return null
+    const version = await ctx.db.get(project.publishedVersionId)
+    return version ? versionPageDoc(ctx, version, path) : null
   },
 })
 
@@ -40,18 +70,19 @@ export const liveVersionByHost = internalQuery({
       projectId: project._id,
       version: version.number,
       publishedAt: project.publishedAt ?? version.createdAt,
+      pages: versionPages(project, version),
     }
   },
 })
 
-/** A published version's page, fetched by the edge worker when it has no render cached. */
+/** A page of a published version, fetched by the edge worker when it has no render cached. */
 export const versionDoc = internalQuery({
-  args: { projectId: v.id("projects"), version: v.number() },
-  handler: async (ctx, { projectId, version }) => {
+  args: { projectId: v.id("projects"), version: v.number(), path: v.optional(v.string()) },
+  handler: async (ctx, { projectId, version, path }) => {
     const found = await ctx.db
       .query("versions")
       .withIndex("by_project", (q) => q.eq("projectId", projectId).eq("number", version))
       .unique()
-    return found ? loadDoc(ctx, found.doc) : null
+    return found ? versionPageDoc(ctx, found, path ?? HOME_PATH) : null
   },
 })

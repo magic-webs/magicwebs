@@ -55,6 +55,8 @@ type Selected = { id: string; type: string } | null
 
 type ChatPanelProps = {
   projectId: Id<"projects">
+  /** The page open in the editor; the AI edits this page. */
+  path: string
   selected: Selected
   onClearSelection: () => void
 }
@@ -74,6 +76,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
 function Conversation({
   projectId,
+  path,
   selected,
   onClearSelection,
   initialMessages,
@@ -89,10 +92,10 @@ function Conversation({
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         // The server holds the conversation; send only the newest message.
         prepareSendMessagesRequest: ({ messages, body }) => ({
-          body: { projectId, message: messages.at(-1), selectedId: body?.selectedId ?? null },
+          body: { projectId, path, message: messages.at(-1), selectedId: body?.selectedId ?? null },
         }),
       }),
-    [projectId, token],
+    [projectId, path, token],
   )
   const { messages, setMessages, sendMessage, regenerate, status, stop, error, clearError } = useChat({
     id: projectId,

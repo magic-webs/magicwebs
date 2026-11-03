@@ -5,7 +5,10 @@ import { PageDocSchema } from "@magicwebs/page-schema"
 
 import type { Id } from "./_generated/dataModel"
 import { mutation, query, type MutationCtx } from "./_generated/server"
-import { assertWorker, getDraft, ownedProject, storeDoc } from "./lib"
+import { HOME_PATH } from "@magicwebs/page-schema"
+
+import { assertWorker, getDraft, ownedProject, setPageState, storeDoc } from "./lib"
+import { scheduleAutoPublish } from "./versions"
 import { aiUsage } from "./models"
 
 // Crawl jobs are pulled by the Playwright workers on the VPS. Every mutation
@@ -48,15 +51,16 @@ export const claim = mutation({
 
     if (job.attempts >= MAX_ATTEMPTS) {
       await ctx.db.patch(job._id, { status: "failed", error: "Gave up after repeated worker failures" })
-      await ctx.db.patch(job.projectId, { status: "failed", error: "Cloning failed repeatedly", step: undefined })
+      await setPageState(ctx, job.projectId, job.path ?? HOME_PATH, { status: "failed", error: "Cloning failed repeatedly" })
       return null
     }
 
     await ctx.db.patch(job._id, { status: "running", workerId, claimedAt: now, attempts: job.attempts + 1 })
-    await ctx.db.patch(job.projectId, { step: "Opening page" })
+    await setPageState(ctx, job.projectId, job.path ?? HOME_PATH, { step: "Opening page" })
     return {
       jobId: job._id,
       projectId: job.projectId,
+      path: job.path ?? HOME_PATH,
       url: job.url,
       model: job.model,
       effort: job.effort,
@@ -72,7 +76,7 @@ export const progress = mutation({
     const job = await ctx.db.get(jobId)
     if (!job || job.status !== "running") return
     await ctx.db.patch(jobId, { claimedAt: Date.now() })
-    await ctx.db.patch(job.projectId, { step })
+    await setPageState(ctx, job.projectId, job.path ?? HOME_PATH, { step })
   },
 })
 
@@ -87,20 +91,29 @@ export const complete = mutation({
       throw new ConvexError(`Cloned page is invalid: ${z.prettifyError(parsed.error)}`)
     }
 
-    const draft = await getDraft(ctx, job.projectId)
+    const path = job.path ?? HOME_PATH
+    const draft = await getDraft(ctx, job.projectId, path)
     const now = Date.now()
     await ctx.db.patch(draft._id, { doc: await storeDoc(ctx, parsed.data), revision: draft.revision + 1, updatedAt: now })
     await ctx.db.insert("edits", {
       projectId: job.projectId,
+      path,
       revision: draft.revision + 1,
       source: "clone",
       ops: [],
       results: [`Cloned ${job.url}`],
       createdAt: now,
     })
-    await clearBriefs(ctx, job.projectId)
+    await clearBriefs(ctx, job.projectId, path)
     await ctx.db.patch(jobId, { status: "done", usage })
-    await ctx.db.patch(job.projectId, { status: "ready", step: undefined, error: undefined, usage })
+    await ctx.db.patch(job.projectId, { usage })
+    await setPageState(ctx, job.projectId, path, { status: "ready" })
+    // A page added to a site that is already live goes live once it is cloned.
+    // Recloning an existing page waits for the user to publish, as before.
+    const project = await ctx.db.get(job.projectId)
+    if (draft.revision === 0 && path !== HOME_PATH && project?.publishedVersionId) {
+      await scheduleAutoPublish(ctx, job.projectId)
+    }
   },
 })
 
@@ -111,7 +124,7 @@ export const fail = mutation({
     const job = await ctx.db.get(jobId)
     if (!job) return
     await ctx.db.patch(jobId, { status: "failed", error })
-    await ctx.db.patch(job.projectId, { status: "failed", step: undefined, error })
+    await setPageState(ctx, job.projectId, job.path ?? HOME_PATH, { status: "failed", error })
   },
 })
 
@@ -141,19 +154,22 @@ export const handOff = mutation({
     assertWorker(secret)
     const job = await ctx.db.get(jobId)
     if (!job) throw new ConvexError("Job not found")
-    await clearBriefs(ctx, job.projectId)
-    await ctx.db.insert("rebuildBriefs", { projectId: job.projectId, jobId, url, screenshots, text, createdAt: Date.now() })
+    const path = job.path ?? HOME_PATH
+    await clearBriefs(ctx, job.projectId, path)
+    await ctx.db.insert("rebuildBriefs", { projectId: job.projectId, jobId, path, url, screenshots, text, createdAt: Date.now() })
     await ctx.db.patch(jobId, { status: "awaiting_agent" })
-    await ctx.db.patch(job.projectId, { step: "Too large to copy exactly. Waiting for your agent to rebuild it" })
+    await setPageState(ctx, job.projectId, path, { step: "Too large to copy exactly. Waiting for your agent to rebuild it" })
   },
 })
 
-async function clearBriefs(ctx: MutationCtx, projectId: Id<"projects">) {
+/** Drop a page's pending rebuild briefs and their screenshots. */
+export async function clearBriefs(ctx: MutationCtx, projectId: Id<"projects">, path: string) {
   const briefs = await ctx.db
     .query("rebuildBriefs")
     .withIndex("by_project", (q) => q.eq("projectId", projectId))
     .collect()
   for (const brief of briefs) {
+    if ((brief.path ?? HOME_PATH) !== path) continue
     for (const file of brief.screenshots) await ctx.storage.delete(file)
     await ctx.db.delete(brief._id)
   }

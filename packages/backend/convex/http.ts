@@ -39,10 +39,11 @@ http.route({
     const projectId = params.get("projectId")
     const version = Number(params.get("version"))
     if (!projectId || !Number.isInteger(version)) return json(null, 0)
+    const path = params.get("path") ?? undefined
     // Versions are immutable, so a fetched doc can be cached for a long time.
     // A malformed id fails argument validation; treat it as not found.
     const doc = await ctx
-      .runQuery(internal.edgeData.versionDoc, { projectId: projectId as Id<"projects">, version })
+      .runQuery(internal.edgeData.versionDoc, { projectId: projectId as Id<"projects">, version, path })
       .catch(() => null)
     return json(doc, doc ? 31536000 : 0)
   }),

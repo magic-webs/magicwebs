@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 import { ChatPanel } from "./chat-panel"
 import { DomainsDialog } from "./domains-dialog"
 import { Inspector } from "./inspector"
+import { PageSwitcher } from "./page-switcher"
 import { PreviewFrame, type Device } from "./preview-frame"
 import { ProjectStatus } from "./project-status"
 import { SectionsPanel } from "./sections-panel"
@@ -31,17 +32,26 @@ const DEVICES: { id: Device; icon: typeof Monitor; label: string }[] = [
 ]
 
 export function Editor({ projectId }: { projectId: Id<"projects"> }) {
+  const [openPath, setPath] = useState("/")
   const project = useQuery(api.projects.get, { projectId })
-  const draft = useQuery(api.drafts.get, { projectId })
+  const pages = useQuery(api.pages.list, { projectId })
+  // A page removed elsewhere (another tab, an agent) falls back to the home page.
+  const path = !pages || pages.some((p) => p.path === openPath) ? openPath : "/"
+  const draft = useQuery(api.drafts.get, { projectId, path })
   const publish = useMutation(api.versions.publish)
   const reclone = useMutation(api.projects.reclone)
-  const { apply, error, clearError } = useApplyOps(projectId)
+  const { apply, error, clearError } = useApplyOps(projectId, path)
 
   const [device, setDevice] = useState<Device>("desktop")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [publishing, setPublishing] = useState(false)
 
-  if (project === undefined || draft === undefined) {
+  function openPage(next: string) {
+    setSelectedId(null)
+    setPath(next)
+  }
+
+  if (project === undefined || draft === undefined || pages === undefined) {
     return (
       <div className="grid h-svh place-items-center">
         <Spinner />
@@ -64,6 +74,9 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
   const doc = draft.doc
   const selected = doc.sections.find((s) => s.id === selectedId) ?? null
   const isEmpty = doc.sections.length === 0
+  const page = pages.find((p) => p.path === path) ?? pages[0]!
+  // Publishing needs the home page; other pages join the site once they're cloned.
+  const homeMissing = path === "/" ? isEmpty : pages.find((p) => p.path === "/")?.status !== "ready"
   // Every edit publishes itself about a second later; until then it is pending.
   const hasUnpublishedChanges = !project.publishedAt || draft.updatedAt > project.publishedAt
   const autoPublishing = hasUnpublishedChanges && !!project.autoPublishId
@@ -85,6 +98,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
         </Button>
         <span className="truncate text-sm font-medium">{project.name}</span>
         <ProjectStatus status={project.status} published={!!project.publishedVersionId} />
+        <PageSwitcher projectId={projectId} sourceUrl={project.sourceUrl} pages={pages} path={path} onChange={openPage} />
         {project.publishedVersionId && hasUnpublishedChanges && (
           <Badge variant="outline" className="hidden border-amber-500/50 text-amber-600 sm:inline-flex dark:text-amber-400">
             {autoPublishing ? "Going live…" : "Unpublished changes"}
@@ -114,7 +128,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
               size="sm"
               variant="ghost"
               nativeButton={false}
-              render={<a href={`https://${project.hostname}`} target="_blank" rel="noreferrer" />}
+              render={<a href={`https://${project.hostname}${path === "/" ? "" : path}`} target="_blank" rel="noreferrer" />}
             >
               <ExternalLink />
               <span className="hidden lg:inline">View live</span>
@@ -123,7 +137,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
           <Button
             size="sm"
             onClick={onPublish}
-            disabled={publishing || autoPublishing || isEmpty || project.status === "cloning" || !hasUnpublishedChanges}
+            disabled={publishing || autoPublishing || homeMissing || project.status === "cloning" || !hasUnpublishedChanges}
             title={hasUnpublishedChanges ? "Make the current draft live now." : "Edits go live automatically."}
           >
             {(publishing || autoPublishing) && <Spinner />}
@@ -153,6 +167,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
             <TabsContent value="ai" className="min-h-0 flex-1">
               <ChatPanel
                 projectId={projectId}
+                path={path}
                 selected={selected && { id: selected.id, type: selected.type }}
                 onClearSelection={() => setSelectedId(null)}
               />
@@ -167,19 +182,22 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
         </aside>
 
         <main className="relative min-w-0 flex-1">
-          {project.status !== "ready" && isEmpty ? (
+          {page.status !== "ready" && isEmpty ? (
             <div className="grid h-full place-items-center p-6 text-center">
-              {project.status === "cloning" ? (
+              {page.status === "cloning" ? (
                 <div className="flex flex-col items-center gap-3">
                   <Spinner className="size-6" />
-                  <p className="font-medium">Building from {new URL(project.sourceUrl).hostname}</p>
-                  <p className="text-sm text-muted-foreground">{project.step ?? "Working"}…</p>
+                  <p className="font-medium">
+                    Building {page.path === "/" ? "" : `${page.title} `}from {new URL(page.sourceUrl).hostname}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{page.step ?? "Working"}…</p>
+                  {pages.length > 1 && project.step && <p className="text-xs text-muted-foreground">{project.step}</p>}
                 </div>
               ) : (
                 <div className="flex max-w-sm flex-col items-center gap-3">
                   <p className="font-medium">Build failed</p>
-                  <p className="text-sm text-muted-foreground">{project.error}</p>
-                  <Button variant="outline" onClick={() => reclone({ projectId })}>
+                  <p className="text-sm text-muted-foreground">{page.error}</p>
+                  <Button variant="outline" onClick={() => reclone({ projectId, path: page.path })}>
                     <RotateCw />
                     Try again
                   </Button>

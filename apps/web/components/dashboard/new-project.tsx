@@ -1,12 +1,13 @@
 "use client"
 
-import { useMutation } from "convex/react"
+import { useAction, useMutation } from "convex/react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
+import { MAX_SITE_PAGES } from "@magicwebs/page-schema"
 
-import { ArrowRightIcon, PlusIcon } from "@/components/icons"
+import { ArrowLeftIcon, ArrowRightIcon, PlusIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -14,12 +15,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner"
 
 import { EFFORTS, errorText, MODELS, useProjectDefaults, type Effort, type Model } from "./lib"
+import { PagePicker, type DiscoveredPage } from "./page-picker"
 
 const MODEL_ITEMS = MODELS.map((m) => ({ value: m.value, label: `${m.label} · ${m.hint}` }))
 
 export function NewProjectForm({ autoFocus }: { autoFocus?: boolean }) {
   const router = useRouter()
   const create = useMutation(api.projects.create)
+  const discover = useAction(api.pages.discover)
   const [defaults] = useProjectDefaults()
   const [url, setUrl] = useState("")
   const [name, setName] = useState("")
@@ -27,18 +30,21 @@ export function NewProjectForm({ autoFocus }: { autoFocus?: boolean }) {
   const [effort, setEffort] = useState<Effort | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // Step two: the site's pages, with the ones to clone ticked (the home page always is).
+  const [site, setSite] = useState<{ url: string; pages: DiscoveredPage[] } | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [discoveryFailed, setDiscoveryFailed] = useState(false)
 
-  async function onSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    if (!url.trim()) return
+  async function build(pages: DiscoveredPage[], homeUrl: string) {
     setSubmitting(true)
     setError(null)
     try {
       const projectId = await create({
-        url: url.trim(),
+        url: homeUrl,
         name: name.trim() || undefined,
         model: model ?? defaults.model,
         effort: effort ?? defaults.effort,
+        pages: pages.map((p) => ({ url: p.url, title: p.title })),
       })
       router.push(`/projects/${projectId}`)
     } catch (err) {
@@ -47,8 +53,57 @@ export function NewProjectForm({ autoFocus }: { autoFocus?: boolean }) {
     }
   }
 
+  async function onFindPages(event: React.FormEvent) {
+    event.preventDefault()
+    if (!url.trim()) return
+    setSubmitting(true)
+    setError(null)
+    setDiscoveryFailed(false)
+    try {
+      const found = await discover({ url: url.trim() })
+      setSite(found)
+      setSelected(new Set())
+    } catch (err) {
+      setError(errorText(err))
+      setDiscoveryFailed(true)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (site) {
+    const home = site.pages[0]!
+    const others = site.pages.slice(1).filter((p) => selected.has(p.path))
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm">
+          Pick the pages of <span className="font-medium">{new URL(site.url).hostname}</span> to clone. The home page is
+          always included; the others keep their paths, and links between them point at your copy.
+        </p>
+        <PagePicker
+          pages={site.pages}
+          selected={selected}
+          onChange={setSelected}
+          locked={new Map([[home.path, "Home"]])}
+          max={MAX_SITE_PAGES}
+        />
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <div className="flex justify-between gap-2">
+          <Button type="button" variant="ghost" onClick={() => setSite(null)} disabled={submitting}>
+            <ArrowLeftIcon />
+            Back
+          </Button>
+          <Button type="button" onClick={() => build(others, site.url)} disabled={submitting}>
+            {submitting ? <Spinner /> : <ArrowRightIcon />}
+            Clone {others.length + 1 === 1 ? "1 page" : `${others.length + 1} pages`}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-3">
+    <form onSubmit={onFindPages} className="flex flex-col gap-3">
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input
           value={url}
@@ -61,7 +116,7 @@ export function NewProjectForm({ autoFocus }: { autoFocus?: boolean }) {
         />
         <Button type="submit" size="lg" className="h-10" disabled={submitting || !url.trim()}>
           {submitting ? <Spinner /> : <ArrowRightIcon />}
-          Build page
+          {submitting ? "Finding pages" : "Find pages"}
         </Button>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -100,7 +155,16 @@ export function NewProjectForm({ autoFocus }: { autoFocus?: boolean }) {
       <p className="text-xs text-muted-foreground">
         Pages up to 4 MB are copied exactly. Bigger pages are rebuilt by the model you pick.
       </p>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+          {error}
+          {discoveryFailed && (
+            <Button type="button" size="xs" variant="outline" onClick={() => build([], url.trim())} disabled={submitting}>
+              Clone just this page
+            </Button>
+          )}
+        </div>
+      )}
     </form>
   )
 }
@@ -116,7 +180,8 @@ export function NewProjectDialog() {
         <DialogHeader>
           <DialogTitle>New project</DialogTitle>
           <DialogDescription>
-            Paste the URL of any public page. It&apos;s rebuilt as an editable page you can publish on your own domain.
+            Paste the URL of any public site. Pick which of its pages to clone, up to {MAX_SITE_PAGES}; they become an
+            editable site you can publish on your own domain.
           </DialogDescription>
         </DialogHeader>
         <NewProjectForm autoFocus />

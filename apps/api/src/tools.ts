@@ -7,9 +7,9 @@ import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
 import { OP_DEFINITIONS, OP_NAMES, outline, type Op, type PageDoc } from "@magicwebs/page-schema"
 
 // One definition of every page tool, exposed twice: to the in-app AI chat
-// (AI SDK tools bound to the open project) and to external clients over MCP
-// (where each call names its project). Each run gets a Convex client signed in
-// as the user it acts for.
+// (AI SDK tools bound to the open project and page) and to external clients
+// over MCP (where each call names its project and, optionally, its page). Each
+// run gets a Convex client signed in as the user it acts for.
 
 export type EditSource = "ai" | "mcp"
 
@@ -18,15 +18,18 @@ export type PageTool = {
   input: z.ZodObject
   run: (
     convex: ConvexHttpClient,
-    projectId: Id<"projects">,
+    target: PageTarget,
     input: Record<string, unknown>,
     source: EditSource,
   ) => Promise<unknown>
 }
 
-async function loadDoc(convex: ConvexHttpClient, projectId: Id<"projects">): Promise<PageDoc> {
-  const draft = await convex.query(api.drafts.get, { projectId })
-  if (!draft) throw new Error("Project not found")
+/** The page a tool acts on: a project and the path of one of its pages ("/" is the home page). */
+export type PageTarget = { projectId: Id<"projects">; path: string }
+
+async function loadDoc(convex: ConvexHttpClient, { projectId, path }: PageTarget): Promise<PageDoc> {
+  const draft = await convex.query(api.drafts.get, { projectId, path })
+  if (!draft) throw new Error(path === "/" ? "Project not found" : `This site has no page ${path}`)
   return draft.doc
 }
 
@@ -35,9 +38,9 @@ function editTool(name: (typeof OP_NAMES)[number]): PageTool {
   return {
     description: def.description,
     input: def.input,
-    run: async (convex, projectId, input, source) => {
+    run: async (convex, { projectId, path }, input, source) => {
       const op = { ...input, op: name } as Op
-      const { results } = await convex.mutation(api.drafts.applyOps, { projectId, ops: [op], source })
+      const { results } = await convex.mutation(api.drafts.applyOps, { projectId, path, ops: [op], source })
       return { ok: true, results }
     },
   }
@@ -48,13 +51,13 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
     description:
       "List the page's sections in order with their ids and types. Call this first to find the section ids you need.",
     input: z.object({}),
-    run: async (convex, projectId) => outline(await loadDoc(convex, projectId)),
+    run: async (convex, target) => outline(await loadDoc(convex, target)),
   },
   get_section: {
     description: "Get the full JSON of one section, including all props and style.",
     input: z.object({ sectionId: z.string() }),
-    run: async (convex, projectId, { sectionId }) => {
-      const section = (await loadDoc(convex, projectId)).sections.find((s) => s.id === sectionId)
+    run: async (convex, target, { sectionId }) => {
+      const section = (await loadDoc(convex, target)).sections.find((s) => s.id === sectionId)
       if (!section) throw new Error(`No section with id "${sectionId}"`)
       return section
     },
@@ -62,8 +65,8 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
   get_theme_and_meta: {
     description: "Get the global theme (colors, fonts, radius, width) and SEO metadata.",
     input: z.object({}),
-    run: async (convex, projectId) => {
-      const doc = await loadDoc(convex, projectId)
+    run: async (convex, target) => {
+      const doc = await loadDoc(convex, target)
       return { theme: doc.theme, meta: doc.meta }
     },
   },
@@ -71,8 +74,8 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
     description:
       "Find rules in the page stylesheet of an exact clone (html sections) whose selector or declarations contain the query, e.g. a class name from get_section or a color. Use before edit_page_css.",
     input: z.object({ query: z.string() }),
-    run: async (convex, projectId, { query }) => {
-      const css = (await loadDoc(convex, projectId)).styles?.css ?? ""
+    run: async (convex, target, { query }) => {
+      const css = (await loadDoc(convex, target)).styles?.css ?? ""
       const needle = String(query).toLowerCase()
       // Top-level rules, keeping @media blocks whole so edits can copy them exactly.
       const rules: string[] = []
@@ -93,9 +96,10 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
     description:
       "Apply several edit operations atomically in one step (all succeed or none do). Each item is an object with an `op` field naming one of the edit tools plus that tool's arguments.",
     input: z.object({ ops: z.array(z.record(z.string(), z.any())) }),
-    run: async (convex, projectId, { ops }, source) => {
+    run: async (convex, { projectId, path }, { ops }, source) => {
       const { results } = await convex.mutation(api.drafts.applyOps, {
         projectId,
+        path,
         ops: ops as unknown[],
         source,
       })
@@ -104,19 +108,20 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
   },
   ...Object.fromEntries(OP_NAMES.map((name) => [name, editTool(name)])),
   publish_page: {
-    description: "Publish the current draft so it goes live. Only do this when the user asks to publish.",
+    description:
+      "Publish the current drafts of every page of the site so they go live. Only do this when the user asks to publish.",
     input: z.object({ note: z.string().optional().describe("Short description of what changed") }),
-    run: async (convex, projectId, { note }) => convex.mutation(api.versions.publish, { projectId, note: note as string | undefined }),
+    run: async (convex, { projectId }, { note }) => convex.mutation(api.versions.publish, { projectId, note: note as string | undefined }),
   },
   list_versions: {
     description: "List published versions, newest first.",
     input: z.object({}),
-    run: async (convex, projectId) => convex.query(api.versions.list, { projectId }),
+    run: async (convex, { projectId }) => convex.query(api.versions.list, { projectId }),
   },
   rollback_to_version: {
-    description: "Make an earlier published version live again and load it into the draft.",
+    description: "Make an earlier published version of the whole site live again and load it into the drafts.",
     input: z.object({ versionId: z.string() }),
-    run: async (convex, projectId, { versionId }) => {
+    run: async (convex, { projectId }, { versionId }) => {
       await convex.mutation(api.versions.rollback, { projectId, versionId: versionId as Id<"versions"> })
       return { ok: true }
     },

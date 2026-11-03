@@ -19,6 +19,7 @@ type Win = typeof globalThis extends { window: infer W } ? W : any
 type Evt = typeof globalThis extends { MouseEvent: { prototype: infer E } } ? E : any
 type Entry = typeof globalThis extends { IntersectionObserverEntry: { prototype: infer E } } ? E : any
 type KeyEvt = typeof globalThis extends { KeyboardEvent: { prototype: infer E } } ? E : any
+type WheelEvt = typeof globalThis extends { WheelEvent: { prototype: infer E } } ? E : any
 
 export function exactRuntime(d: Doc) {
   const w = d.defaultView as Win
@@ -88,18 +89,29 @@ export function exactRuntime(d: Doc) {
 
   const animated = all("[data-mw-reveal],[data-aos],[data-mw-wow],[data-mw-count]")
   if ("IntersectionObserver" in w) {
+    // A line that slides up from under a mask (SplitText headings) starts
+    // clipped out of view entirely and would never intersect, so its mask is
+    // watched instead.
+    const watched = new Map<El, El[]>()
+    animated.forEach((el) => {
+      const parent = el.parentElement as El | null
+      const s = parent && parent !== d.body ? w.getComputedStyle(parent) : null
+      const target = s && (s.overflowX !== "visible" || s.overflowY !== "visible" || s.clipPath !== "none") ? parent! : el
+      if (!watched.has(target)) watched.set(target, [])
+      watched.get(target)!.push(el)
+    })
     const io = new w.IntersectionObserver(
       (entries: Entry[]) => {
         let order = 0
         entries.forEach((entry: Entry) => {
           if (!entry.isIntersecting) return
           io.unobserve(entry.target)
-          reveal(entry.target as El, order++)
+          ;(watched.get(entry.target as El) || []).forEach((el) => reveal(el, order++))
         })
       },
       { rootMargin: "0px 0px -6% 0px" },
     )
-    animated.forEach((el) => io.observe(el))
+    watched.forEach((_, target) => io.observe(target))
   } else {
     animated.forEach((el) => reveal(el, 0))
   }
@@ -204,17 +216,20 @@ export function exactRuntime(d: Doc) {
       if (!fx || !Array.isArray(fx.y) || fx.y.length < 2 || !fx.p || typeof fx.p !== "object") return null
       let anchor: El | null = el
       for (let i = 0; i < (Number(fx.u) || 1) && anchor && anchor.parentElement; i++) anchor = anchor.parentElement
-      return { el, anchor: anchor || el, fx }
+      return { el, anchor: anchor || el, fx, last: {} as Record<string, string> }
     })
-    .filter((e): e is { el: El; anchor: El; fx: ScrollFx } => e !== null)
+    .filter((e): e is { el: El; anchor: El; fx: ScrollFx; last: Record<string, string> } => e !== null)
   if (effects.length) {
     let queued = false
     const play = () => {
       queued = false
-      effects.forEach(({ el, anchor, fx }) => {
+      // Every position is read before any style is written: reading one after
+      // a write would force a fresh layout per effect on every frame.
+      const positions = effects.map(({ anchor }) => -anchor.getBoundingClientRect().top)
+      effects.forEach(({ el, fx, last }, n) => {
         // Recorded on a desktop window: narrower layouts keep the resting state.
         if (w.innerWidth < (Number(fx.w) || 0) * 0.7) return
-        const at = -anchor.getBoundingClientRect().top
+        const at = positions[n]
         let i = 0
         while (i < fx.y.length - 2 && at > fx.y[i + 1]) i++
         const span = fx.y[i + 1] - fx.y[i]
@@ -222,7 +237,10 @@ export function exactRuntime(d: Doc) {
         Object.keys(fx.p).forEach((prop) => {
           const values = fx.p[prop]
           if (!/^-{0,2}[a-z][a-z0-9-]*$/i.test(prop) || !Array.isArray(values) || values.length !== fx.y.length) return
-          el.style.setProperty(prop, mix(String(values[i]), String(values[i + 1]), t))
+          const value = mix(String(values[i]), String(values[i + 1]), t)
+          if (last[prop] === value) return
+          last[prop] = value
+          el.style.setProperty(prop, value)
         })
       })
     }
@@ -235,6 +253,49 @@ export function exactRuntime(d: Doc) {
     w.addEventListener("scroll", queue, { passive: true })
     w.addEventListener("resize", queue)
     play()
+  }
+
+  // Smooth wheel scrolling, for pages that ran Lenis -------------------------
+  // Without it the wheel moves in coarse steps and every scrubbed effect jumps
+  // with it. Like Lenis, each frame covers a tenth of the way to the target;
+  // touch, keyboard and scroll areas inside the page keep native scrolling.
+  const reduced = w.matchMedia && w.matchMedia("(prefers-reduced-motion: reduce)").matches
+  if (root.classList.contains("lenis") && !reduced) {
+    let target = 0
+    let at = 0
+    let running = false
+    const glide = () => {
+      at += (target - at) * 0.1
+      if (Math.abs(target - at) < 0.5) at = target
+      w.scrollTo({ top: at, behavior: "instant" })
+      if (at !== target) w.requestAnimationFrame(glide)
+      else running = false
+    }
+    const scrollsItself = (from: El | null) => {
+      for (let el = from; el && el !== d.body && el !== root; el = el.parentElement) {
+        if (el.hasAttribute("data-lenis-prevent")) return true
+        const overflow = w.getComputedStyle(el).overflowY
+        if ((overflow === "auto" || overflow === "scroll") && el.scrollHeight > el.clientHeight) return true
+      }
+      return false
+    }
+    w.addEventListener(
+      "wheel",
+      (event: WheelEvt) => {
+        if (event.ctrlKey || event.defaultPrevented || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
+        if (scrollsItself(event.target as El | null)) return
+        event.preventDefault()
+        // Picks up wherever the scrollbar, keyboard or a link left the page.
+        if (!running) target = at = w.scrollY
+        const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? w.innerHeight : 1
+        target = Math.max(0, Math.min(root.scrollHeight - w.innerHeight, target + event.deltaY * unit))
+        if (!running) {
+          running = true
+          w.requestAnimationFrame(glide)
+        }
+      },
+      { passive: false },
+    )
   }
 
   // Escape closes an open popup through its recorded close button -----------

@@ -271,7 +271,9 @@ async function scrollAndScan() {
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
   const w = window as unknown as Record<string, unknown>
   const scan = (w.__mwScan as () => void) ?? (() => {})
-  const moved = new Map<Element, { min: number; max: number }>()
+  // "from" is the style before the first change, so scrubbed effects can be
+  // told apart from one-shot entrances once the page is back at the top.
+  const moved = new Map<Element, { min: number; max: number; from: string }>()
   const observer = new MutationObserver((records) => {
     const y = window.scrollY
     for (const r of records) {
@@ -279,13 +281,13 @@ async function scrollAndScan() {
       if (range) {
         range.min = Math.min(range.min, y)
         range.max = Math.max(range.max, y)
-      } else if (moved.size < 400) moved.set(r.target as Element, { min: y, max: y })
+      } else if (moved.size < 400) moved.set(r.target as Element, { min: y, max: y, from: r.oldValue ?? "" })
     }
   })
   scan()
   // Changes before the first scroll are load-time animation, not scroll effects.
   await wait(300)
-  observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["style"] })
+  observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["style"], attributeOldValue: true })
   const step = Math.max(240, window.innerHeight * 0.45)
   for (let y = 0, i = 0; y < document.documentElement.scrollHeight && y < 40000 && i < 220; i++) {
     scan()
@@ -314,7 +316,7 @@ async function recordScrollEffects({ budgetMs }: ScrollEffectArgs) {
   const started = performance.now()
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
   const w = window as unknown as Record<string, unknown>
-  const moved = w.__mwMoved as Map<Element, { min: number; max: number }> | undefined
+  const moved = w.__mwMoved as Map<Element, { min: number; max: number; from: string }> | undefined
   const CAROUSEL = ".swiper,.swiper-container,.slick-slider,.splide,.owl-carousel,.flickity-enabled,.glide,.keen-slider,.embla"
   const vh = window.innerHeight
   let candidates = [...(moved ?? new Map()).keys()].filter(
@@ -336,7 +338,12 @@ async function recordScrollEffects({ budgetMs }: ScrollEffectArgs) {
     if (!changing) break
   }
   await wait(700)
-  candidates = candidates.filter((el, i) => styleOf(el) === before[i]).slice(0, 60)
+  candidates = candidates.filter((el, i) => styleOf(el) === before[i])
+  // Scrubbed styles are back where they started now that the page is at the
+  // top again; entrance animations that played once are not. Those can't be
+  // scroll effects, so they only fill the places left over.
+  const home = (el: Element) => styleOf(el) === moved!.get(el)!.from
+  candidates = [...candidates.filter(home), ...candidates.filter((el) => !home(el))].slice(0, 60)
   if (!candidates.length) return { sticky: 0, scrollEffects: 0, scrollCandidates: 0, scrollSamples: 0 }
 
   const ranges = candidates.map((el) => moved!.get(el)!)
@@ -1495,6 +1502,24 @@ function serializeInPage({ svgInlineLimit }: { svgInlineLimit: number }) {
   const { blocks, extras, floats } = prepared.roots
   const allRoots = [...blocks, ...extras, ...floats]
   const inFlow = allRoots.map((r) => !/^(fixed|absolute)$/.test(getComputedStyle(r).position))
+  // The z-index a fixed or sticky root (a header) stacks at. Each root gets
+  // its own copy of the wrappers, and a copy that forms a stacking context
+  // would otherwise trap the root under the blocks that follow it.
+  const lift = allRoots.map((r) => {
+    const s = getComputedStyle(r)
+    const z = parseInt(s.zIndex, 10)
+    return /^(fixed|sticky)$/.test(s.position) && z > 0 ? z : 0
+  })
+  const stacks = (s: CSSStyleDeclaration) =>
+    s.isolation === "isolate" ||
+    s.zIndex !== "auto" ||
+    parseFloat(s.opacity) < 1 ||
+    s.transform !== "none" ||
+    s.filter !== "none" ||
+    s.backdropFilter !== "none" ||
+    s.mixBlendMode !== "normal" ||
+    s.clipPath !== "none" ||
+    /paint|strict|content/.test(s.contain)
   const rootsIn = new Map<Element, number[]>()
   allRoots.forEach((r, i) => {
     for (let p = r.parentElement; p && p !== body; p = p.parentElement) {
@@ -1542,6 +1567,10 @@ function serializeInPage({ svgInlineLimit }: { svgInlineLimit: number }) {
       style += `margin-top:0!important;border-top-width:0!important;padding-top:${px(s.rowGap) > 0 && inFlow[i] ? s.rowGap : "0"}!important;`
     }
     if (flow[flow.length - 1] !== i) style += "margin-bottom:0!important;border-bottom-width:0!important;padding-bottom:0!important;"
+    if (lift[i] && stacks(s)) {
+      style += `z-index:${Math.max(lift[i], parseInt(s.zIndex, 10) || 0)}!important;`
+      if (s.position === "static") style += "position:relative!important;"
+    }
     return style
   }
   const serRoot = (root: Element, index: number) => {

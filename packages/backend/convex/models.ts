@@ -19,6 +19,9 @@ export const aiEffort = v.union(
  */
 export const aiMode = v.union(v.literal("platform"), v.literal("agent"))
 
+/** A design template a site is revamped in (see DESIGN_TEMPLATES in @magicwebs/page-schema). */
+export const templateId = v.union(v.literal("minimal"), v.literal("midnight"), v.literal("editorial"), v.literal("playful"))
+
 /** Tokens and USD cost of one rebuild, summed over its retries. */
 export const aiUsage = v.object({
   inputTokens: v.number(),
@@ -31,3 +34,4 @@ export const aiUsage = v.object({
 export type AiModel = Infer<typeof aiModel>
 export type AiEffort = Infer<typeof aiEffort>
 export type AiMode = Infer<typeof aiMode>
+export type TemplateIdValue = Infer<typeof templateId>

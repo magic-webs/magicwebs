@@ -12,8 +12,9 @@ apps/
   edge/       Cloudflare Worker that serves every published page
 packages/
   backend/    Convex schema and functions (projects, drafts, versions, jobs, domains)
-  page-schema/  The page JSON schema and edit operations shared by everything
+  page-schema/  The page JSON schema, edit operations and design templates shared by everything
   renderer/   React component registry that renders a page document
+  site-export/  Turns a site into a downloadable Next.js project
 ```
 
 ## How it fits together
@@ -28,6 +29,8 @@ packages/
   - copies images and fonts to R2. The R2 bucket needs CORS that allows the sites' origins, or browsers won't load the fonts.
 
   Pages too big to copy (over 4 MB) are rebuilt by the AI model chosen at creation instead. Exact markup is sanitized every time it is rendered (`packages/page-schema/src/sanitize.ts`), and long strings are stored in the `blobs` table rather than inside the draft, so pages can exceed Convex's 1 MiB document limit.
+- **Revamping** redesigns a site instead of copying it. The user picks a design template (`packages/page-schema/src/designs.ts`: Minimal, Midnight, Editorial, Playful); the crawler captures each page and the chosen model rebuilds its content as typed sections, then `applyTemplate` sets the template's theme, section backgrounds, spacing and animations. A template's component styling is CSS in `packages/renderer/src/templates.ts`, keyed by `theme.template`. The `apply_template` edit switches a typed page to another template instantly. Agents revamp with their own model, through the same rebuild briefs.
+- **Exporting** downloads a site as a standalone Next.js project (`packages/site-export`), built in the browser from the current drafts: pages as JSON content, one statically generated route, and the renderer and schema source embedded by `bun run export-kit`. Rerun it after changing `packages/renderer` or `packages/page-schema`; a test fails while the embedded copy is stale.
 - **Publishing** snapshots the draft as an immutable version and writes it to Workers KV. The single edge Worker maps the hostname to a project, server-renders the published JSON with the shared renderer, and caches the HTML per version. Rolling back points the site at an earlier version.
 - **Accounts**: people sign in to the platform with email and password or Google (Convex Auth). Every project belongs to a user, and every Convex function checks that the caller owns what it touches. The API server never uses a privileged client: the AI chat runs as the signed-in user's session, and MCP clients as the owner of their API key.
 - **Whose AI**: the in-app AI chat and clones started on the platform run on the platform's AI Gateway key. MCP clients (Claude Code, Cursor, any agent) bring their own model and never use the platform's AI: when a page an agent clones is too large to copy exactly, the crawler leaves a rebuild brief (screenshots and the captured structure) instead of calling the AI, and the agent rebuilds the page itself with `get_rebuild_brief` and `submit_rebuilt_page`.
@@ -68,6 +71,6 @@ bun run dev:edge      # Cloudflare Worker via wrangler
 
 The API exposes a Streamable HTTP MCP endpoint at `/mcp`. Create a personal API key on the dashboard's **MCP & API** page and send it as `Authorization: Bearer <key>`. A key acts as its owner and reaches only their projects; revoking it takes effect immediately. Only a hash of each key is stored.
 
-Tools include `list_projects`, `clone_landing_page`, `get_rebuild_brief`, `submit_rebuilt_page`, `get_page_outline`, `get_section`, every edit operation, `apply_operations`, `publish_page`, `list_versions` and `rollback_to_version`.
+Tools include `list_projects`, `clone_landing_page` (with `template` to revamp), `revamp_site`, `get_rebuild_brief`, `submit_rebuilt_page`, `get_page_outline`, `get_section`, every edit operation, `apply_operations`, `publish_page`, `list_versions` and `rollback_to_version`.
 
 Projects created before accounts existed have no owner. Give them to an account with `bunx convex run migrations:claimProjects '{"email":"you@example.com"}'` (inside packages/backend, after signing up).

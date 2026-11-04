@@ -8,7 +8,7 @@ const workspaceRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), ".
 
 const nextConfig: NextConfig = {
   turbopack: { root: workspaceRoot },
-  transpilePackages: ["@magicwebs/page-schema", "@magicwebs/renderer"],
+  transpilePackages: ["@magicwebs/page-schema", "@magicwebs/renderer", "@magicwebs/site-export"],
 }
 
 export default nextConfig

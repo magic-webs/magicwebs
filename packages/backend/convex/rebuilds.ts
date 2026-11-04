@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values"
 import { z } from "zod"
 
-import { HOME_PATH, newSectionId, PageDocSchema } from "@magicwebs/page-schema"
+import { applyTemplate, getTemplate, HOME_PATH, newSectionId, PageDocSchema } from "@magicwebs/page-schema"
 
 import { query, mutation } from "./_generated/server"
 import type { Id } from "./_generated/dataModel"
@@ -34,7 +34,7 @@ export const brief = query({
       const url = await ctx.storage.getUrl(file)
       if (url) screenshots.push(url)
     }
-    return { path: brief.path ?? HOME_PATH, url: brief.url, text: brief.text, screenshots }
+    return { path: brief.path ?? HOME_PATH, url: brief.url, template: brief.template, text: brief.text, screenshots }
   },
 })
 
@@ -49,7 +49,9 @@ export const submit = mutation({
 
     const parsed = PageDocSchema.safeParse(doc)
     if (!parsed.success) throw new ConvexError(`Invalid page: ${z.prettifyError(parsed.error)}`)
-    const page = parsed.data
+    const template = getTemplate(brief.template)
+    // A revamp gets its template's theme and section styling whatever the agent chose.
+    const page = template ? applyTemplate(parsed.data, template) : parsed.data
     // Agents often reuse or omit ids; every section needs a unique one.
     const seen = new Set<string>()
     for (const section of page.sections) {
@@ -67,7 +69,7 @@ export const submit = mutation({
       revision,
       source: "mcp",
       ops: [],
-      results: [`Rebuilt ${brief.url} with your agent`],
+      results: [template ? `Revamped ${brief.url} in the ${template.name} template with your agent` : `Rebuilt ${brief.url} with your agent`],
       createdAt: now,
     })
     for (const file of brief.screenshots) await ctx.storage.delete(file)

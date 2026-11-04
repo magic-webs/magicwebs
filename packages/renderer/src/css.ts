@@ -1,5 +1,7 @@
 import type { Theme } from "@magicwebs/page-schema"
 
+import { templateCss } from "./templates"
+
 // Values from crawled pages and the model end up inside <style> text, so they
 // must not be able to close the tag or open new rule blocks.
 export function cssValue(value: string): string {
@@ -61,8 +63,8 @@ export function pageCss(theme: Theme): string {
 .mw-center .mw-actions,.mw-section[data-align=center] .mw-actions{justify-content:center}
 .mw-btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 22px;border-radius:var(--mw-radius);font-weight:600;text-decoration:none;border:1px solid transparent;transition:transform .15s ease,opacity .15s ease}
 .mw-btn:hover{transform:translateY(-1px);opacity:.92}
-.mw-btn-primary{background:var(--mw-primary);color:var(--mw-primary-fg)}
-.mw-btn-secondary{background:transparent;color:inherit;border-color:var(--mw-border)}
+.mw-root .mw-btn-primary{background:var(--mw-primary);color:var(--mw-primary-fg)}
+.mw-root .mw-btn-secondary{background:transparent;color:inherit;border-color:var(--mw-border)}
 .mw-media{border-radius:calc(var(--mw-radius)*1.5);overflow:hidden}
 .mw-media img{width:100%;object-fit:cover}
 .mw-split{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
@@ -136,7 +138,7 @@ export function pageCss(theme: Theme): string {
 .mw-card{padding:20px}
 .mw-footer-grid{grid-template-columns:1fr}
 }
-`
+${templateCss(theme.template)}`
 }
 
 /** Client script for entrance animations on published pages. */

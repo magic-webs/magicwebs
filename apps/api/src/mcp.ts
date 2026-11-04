@@ -5,7 +5,15 @@ import { z } from "zod"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
-import { MAX_SITE_PAGES, PageDocSchema, REBUILD_RULES } from "@magicwebs/page-schema"
+import {
+  DESIGN_TEMPLATES,
+  getTemplate,
+  MAX_SITE_PAGES,
+  PageDocSchema,
+  REBUILD_RULES,
+  revampRules,
+  TEMPLATE_IDS,
+} from "@magicwebs/page-schema"
 
 import { errorMessage, PAGE_TOOLS } from "./tools"
 
@@ -24,6 +32,12 @@ function failure(error: unknown) {
 
 const SUBMIT_INSTRUCTIONS = `When the page is ready, call submit_rebuilt_page with this project's projectId, the page's path as \`page\` and the page document as \`doc\`. It must match this JSON Schema:
 ${JSON.stringify(z.toJSONSchema(PageDocSchema))}`
+
+const TEMPLATE_ARG = z
+  .enum(TEMPLATE_IDS)
+  .describe(
+    `Design template to revamp the site in: ${DESIGN_TEMPLATES.map((t) => `"${t.id}" (${t.description} Best for: ${t.bestFor}.)`).join(" ")}`,
+  )
 
 const PAGE_ARG = z
   .string()
@@ -73,18 +87,43 @@ function buildServer(convex: ConvexHttpClient): McpServer {
   server.registerTool(
     "clone_landing_page",
     {
-      description: `Clone a public page URL, and optionally more pages of the same site (\`pages\`, URLs from discover_pages), into a new editable site. The URL becomes the home page "/"; other pages keep their paths, and links between cloned pages point at the clone. At most ${MAX_SITE_PAGES} pages. Cloning runs in the background; poll list_pages or list_projects. Most pages are copied exactly. If a page is too large to copy, it is not rebuilt with Magicwebs' AI: its step says it is waiting for your agent, and you rebuild it yourself with get_rebuild_brief and submit_rebuilt_page.`,
-      inputSchema: z.object({ url: z.string(), name: z.string().optional(), pages: z.array(z.string()).optional() }),
+      description: `Clone a public page URL, and optionally more pages of the same site (\`pages\`, URLs from discover_pages), into a new editable site. The URL becomes the home page "/"; other pages keep their paths, and links between cloned pages point at the clone. At most ${MAX_SITE_PAGES} pages. Cloning runs in the background; poll list_pages or list_projects. Most pages are copied exactly. If a page is too large to copy, it is not rebuilt with Magicwebs' AI: its step says it is waiting for your agent, and you rebuild it yourself with get_rebuild_brief and submit_rebuilt_page.
+
+Pass \`template\` to revamp the site instead of copying it: every page is redesigned in that template from the original's content. Revamps are done by your agent: each page waits for you, and you build it with get_rebuild_brief and submit_rebuilt_page.`,
+      inputSchema: z.object({
+        url: z.string(),
+        name: z.string().optional(),
+        pages: z.array(z.string()).optional(),
+        template: TEMPLATE_ARG.optional(),
+      }),
     },
-    async ({ url, name, pages }) => {
+    async ({ url, name, pages, template }) => {
       try {
         const projectId = await convex.mutation(api.projects.create, {
           url,
           name,
           ai: "agent",
+          template,
           pages: pages?.map((page) => ({ url: page })),
         })
         return text({ projectId, status: "cloning" })
+      } catch (error) {
+        return failure(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    "revamp_site",
+    {
+      description:
+        "Redesign an existing project's whole site in a design template, from the original site's content, replacing every page's draft (published versions stay in the history). Each page then waits for your agent: build it with get_rebuild_brief and submit_rebuilt_page. To restyle a page that already has typed sections without rebuilding it, use apply_template instead.",
+      inputSchema: z.object({ projectId: z.string(), template: TEMPLATE_ARG }),
+    },
+    async ({ projectId, template }) => {
+      try {
+        await convex.mutation(api.projects.revamp, { projectId: projectId as Id<"projects">, template, ai: "agent" })
+        return text({ projectId, status: "cloning", template })
       } catch (error) {
         return failure(error)
       }
@@ -148,13 +187,15 @@ function buildServer(convex: ConvexHttpClient): McpServer {
     "get_rebuild_brief",
     {
       description:
-        "For a cloned page too large to copy exactly: get screenshots of the original (desktop slices top to bottom, then mobile), its captured structure, and the rules for rebuilding it as a page document with your own model. Then call submit_rebuilt_page.",
+        "For a page waiting for your agent (a cloned page too large to copy exactly, or a page being revamped in a template): get screenshots of the original (desktop slices top to bottom, then mobile), its captured structure, and the rules for building it as a page document with your own model. Then call submit_rebuilt_page.",
       inputSchema: z.object({ projectId: z.string(), page: PAGE_ARG }),
     },
     async ({ projectId, page }) => {
       try {
         const brief = await convex.query(api.rebuilds.brief, { projectId: projectId as Id<"projects">, path: page })
         if (!brief) return failure("This project isn't waiting for a rebuild. Check its status with list_projects.")
+        const template = getTemplate(brief.template)
+        const rules = template ? revampRules(template) : REBUILD_RULES
         const images = await Promise.all(
           brief.screenshots.map(async (url) => {
             const res = await fetch(url)
@@ -165,7 +206,7 @@ function buildServer(convex: ConvexHttpClient): McpServer {
         )
         return {
           content: [
-            { type: "text" as const, text: `Page: ${brief.path}\n${REBUILD_RULES}\n${SUBMIT_INSTRUCTIONS}` },
+            { type: "text" as const, text: `Page: ${brief.path}\n${rules}\n${SUBMIT_INSTRUCTIONS}` },
             ...images,
             { type: "text" as const, text: brief.text },
           ],

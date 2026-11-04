@@ -22,6 +22,10 @@ export const ImageSchema = z.object({
 // in the highlight color, e.g. "WhatsApp Business **Automation**".
 
 export const ThemeSchema = z.object({
+  template: z
+    .string()
+    .optional()
+    .describe("Design template the page was revamped in (see DESIGN_TEMPLATES); styles the typed sections"),
   colors: z.object({
     background: z.string(),
     foreground: z.string(),

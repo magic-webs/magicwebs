@@ -8,6 +8,7 @@ import { cleanHtml, SECTION_COMPONENTS } from "./sections"
 export { ANIMATION_SCRIPT, EXACT_CSS, fontHref, pageCss } from "./css"
 export { exactRuntime, EXACT_RUNTIME_SCRIPT, syncMediaClasses } from "./runtime"
 export { SECTION_COMPONENTS, safeHref, safeSrc } from "./sections"
+export { templateCss } from "./templates"
 
 /** True for pages that carry original markup (exact clones). */
 export function isExact(doc: PageDoc): boolean {

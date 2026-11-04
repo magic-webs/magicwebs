@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useState } from "react"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
+import { getTemplate, type TemplateId } from "@magicwebs/page-schema"
 
 import {
   AlertTriangleIcon,
@@ -17,6 +18,7 @@ import {
   MoreIcon,
   RefreshIcon,
   RenameIcon,
+  SparkleIcon,
 } from "@/components/icons"
 import { ProjectStatus } from "@/components/editor/project-status"
 import {
@@ -30,7 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,12 +45,16 @@ import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 
 import { errorText, formatCost, modelLabel, type Project } from "./lib"
+import { TemplatePicker } from "./template-picker"
 
 export function ProjectActions({ project, className }: { project: Project; className?: string }) {
   const rename = useMutation(api.projects.rename)
   const reclone = useMutation(api.projects.reclone)
   const remove = useMutation(api.projects.remove)
-  const [dialog, setDialog] = useState<"rename" | "reclone" | "delete" | null>(null)
+  const revamp = useMutation(api.projects.revamp)
+  const [dialog, setDialog] = useState<"rename" | "reclone" | "revamp" | "delete" | null>(null)
+  const [template, setTemplate] = useState<TemplateId | null>(project.template ?? null)
+  const current = getTemplate(project.template)
   const [name, setName] = useState(project.name)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -105,7 +111,11 @@ export function ProjectActions({ project, className }: { project: Project; class
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => open("reclone")} disabled={project.status === "cloning"}>
             <RefreshIcon />
-            Clone again
+            {current ? "Revamp again" : "Clone again"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => open("revamp")} disabled={project.status === "cloning"}>
+            <SparkleIcon />
+            {current ? "Change template…" : "Revamp…"}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => open("delete")}>
@@ -142,10 +152,15 @@ export function ProjectActions({ project, className }: { project: Project; class
       <AlertDialog open={dialog === "reclone"} onOpenChange={(o) => !o && setDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clone {project.name} again?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {current ? "Revamp" : "Clone"} {project.name} again?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              The page at {project.sourceUrl} is copied again and replaces the current draft. Published versions stay as
-              they are, and you can load any of them back from the editor.
+              {current
+                ? `Every page of ${project.sourceUrl} is redesigned again in the ${current.name} template`
+                : `The page at ${project.sourceUrl} is copied again`}{" "}
+              and replaces the current draft. Published versions stay as they are, and you can load any of them back
+              from the editor.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -153,11 +168,43 @@ export function ProjectActions({ project, className }: { project: Project; class
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction disabled={busy} onClick={() => run(() => reclone({ projectId: project._id }))}>
               {busy && <Spinner />}
-              Clone again
+              {current ? "Revamp again" : "Clone again"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={dialog === "revamp"} onOpenChange={(o) => !o && setDialog(null)}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Revamp {project.name}</DialogTitle>
+            <DialogDescription>
+              Every page is redesigned from the original site&apos;s content in the template you pick, using{" "}
+              {modelLabel(project.model)}. It replaces the current drafts; published versions stay in the history.
+            </DialogDescription>
+          </DialogHeader>
+          <TemplatePicker value={template} onChange={setTemplate} disabled={busy} />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <DialogFooter>
+            {current && (
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => run(() => revamp({ projectId: project._id, template: null }))}
+              >
+                Copy exactly instead
+              </Button>
+            )}
+            <Button
+              disabled={busy || !template}
+              onClick={() => template && run(() => revamp({ projectId: project._id, template }))}
+            >
+              {busy ? <Spinner /> : <SparkleIcon />}
+              Revamp in {getTemplate(template ?? undefined)?.name ?? "template"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={dialog === "delete"} onOpenChange={(o) => !o && setDialog(null)}>
         <AlertDialogContent>
@@ -202,7 +249,10 @@ export function ProjectCard({ project }: { project: Project }) {
           >
             {project.name}
           </Link>
-          <span className="truncate text-xs text-muted-foreground">{project.sourceUrl.replace(/^https?:\/\//, "")}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {project.sourceUrl.replace(/^https?:\/\//, "")}
+            {project.template && ` · ${getTemplate(project.template)?.name} revamp`}
+          </span>
         </div>
         <ProjectStatus status={project.status} published={!!project.publishedVersionId} />
         <ProjectActions project={project} className="relative z-10 -mr-1 -mt-1" />

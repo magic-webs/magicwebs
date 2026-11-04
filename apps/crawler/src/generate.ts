@@ -2,15 +2,28 @@ import { generateText, type LanguageModelUsage } from "ai"
 import { z } from "zod"
 
 import type { AiEffort, AiModel } from "@magicwebs/backend/convex/models"
-import { newSectionId, PageDocSchema, REBUILD_RULES, type PageDoc } from "@magicwebs/page-schema"
+import {
+  applyTemplate,
+  newSectionId,
+  PageDocSchema,
+  REBUILD_RULES,
+  revampRules,
+  type DesignTemplate,
+  type PageDoc,
+} from "@magicwebs/page-schema"
 
 import type { Capture } from "./capture"
 import { env } from "./env"
 import type { HtmlFacts } from "./extract"
 
-const INSTRUCTIONS = `${REBUILD_RULES}
-Reply with one JSON object and nothing else (no prose, no code fences) that matches this JSON Schema:
+const REPLY_FORMAT = `Reply with one JSON object and nothing else (no prose, no code fences) that matches this JSON Schema:
 ${JSON.stringify(z.toJSONSchema(PageDocSchema))}`
+
+/** System instructions: identical for every job of a kind, so they stay prompt-cached. */
+function instructionsFor(template: DesignTemplate | undefined): string {
+  return `${template ? revampRules(template) : REBUILD_RULES}
+${REPLY_FORMAT}`
+}
 
 function compactJson(value: unknown, max: number): string {
   const json = JSON.stringify(value)
@@ -45,7 +58,12 @@ const PRICES: Record<string, [number, number, number, number]> = {
   "anthropic/claude-opus-5.5": [4, 20, 0.2, 5],
 }
 
-export type AiOptions = { model?: AiModel; effort?: AiEffort }
+export type AiOptions = {
+  model?: AiModel
+  effort?: AiEffort
+  /** Revamp in this design template instead of rebuilding the page as it looks. */
+  template?: DesignTemplate
+}
 
 /** Tokens and cost summed over every attempt, including ones that were retried. */
 export type AiUsage = {
@@ -66,7 +84,8 @@ export async function reconstruct(
   const usage: AiUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
   for (let attempt = 1; ; attempt++) {
     try {
-      return { doc: normalize(await generate(capture, facts, ai, usage), facts), usage }
+      const doc = normalize(await generate(capture, facts, ai, usage), facts)
+      return { doc: ai.template ? applyTemplate(doc, ai.template) : doc, usage }
     } catch (error) {
       if (!(error instanceof InvalidPageError) || attempt >= MAX_ATTEMPTS) throw error
       console.warn(`Invalid page JSON (attempt ${attempt}/${MAX_ATTEMPTS}): ${error.message.slice(0, 300)}`)
@@ -84,7 +103,7 @@ async function generate(capture: Capture, facts: HtmlFacts, ai: AiOptions, usage
   const { text, finishReason, usage: used } = await generateText({
     model,
     // The instructions (with the page JSON Schema) are identical for every job, so cache them.
-    instructions: { role: "system", content: INSTRUCTIONS, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } },
+    instructions: { role: "system", content: instructionsFor(ai.template), providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } },
     maxOutputTokens: deepEffort ? 64000 : 32000,
     providerOptions: {
       // Route to Anthropic directly; the gateway otherwise may fall back to Bedrock.

@@ -8,6 +8,8 @@ import { capture, type Capture } from "./capture"
 import { env } from "./env"
 import { cloneExact, PageTooLargeError } from "./exact"
 import { extractFromHtml } from "./extract"
+import { getTemplate } from "@magicwebs/page-schema"
+
 import { describeCapture, reconstruct } from "./generate"
 
 const convex = new ConvexHttpClient(env.convexUrl)
@@ -22,28 +24,46 @@ async function runOnce(): Promise<boolean> {
   try {
     let doc
     let usage
-    try {
-      const exact = await cloneExact(job.url, step)
-      doc = exact.doc
-      console.log(`[${job.jobId}] exact copy:`, JSON.stringify(exact.stats))
-    } catch (error) {
-      // Pages too large to store as markup are rebuilt as typed sections instead.
-      if (!(error instanceof PageTooLargeError)) throw error
+    const template = getTemplate(job.template)
+    if (template) {
+      // A revamp: rebuild the page's content in the chosen design template.
+      await step("Capturing the original page")
       const shot = await capture(job.url)
       const facts = extractFromHtml(shot.html, shot.finalUrl)
       if (job.ai === "agent") {
-        // Created by an agent over MCP: it rebuilds the page with its own model.
-        console.warn(`[${job.jobId}] ${error.message}; handing the rebuild to the agent`)
+        console.log(`[${job.jobId}] handing the ${template.id} revamp to the agent`)
         await handOff(job.jobId, shot, describeCapture(shot, facts))
         return true
       }
-      console.warn(`[${job.jobId}] ${error.message}; rebuilding with AI instead`)
-      await step("Page too large to copy exactly, rebuilding with AI")
-      await step("Rebuilding sections with AI")
-      const rebuilt = await reconstruct(shot, facts, { model: job.model, effort: job.effort })
+      await step(`Redesigning in the ${template.name} template`)
+      const rebuilt = await reconstruct(shot, facts, { model: job.model, effort: job.effort, template })
       usage = rebuilt.usage
-      console.log(`[${job.jobId}] ${usage.inputTokens} in / ${usage.outputTokens} out tokens, $${usage.costUsd?.toFixed(4) ?? "?"}`)
+      console.log(`[${job.jobId}] revamp: ${usage.inputTokens} in / ${usage.outputTokens} out tokens, $${usage.costUsd?.toFixed(4) ?? "?"}`)
       doc = rebuilt.doc
+    } else {
+      try {
+        const exact = await cloneExact(job.url, step)
+        doc = exact.doc
+        console.log(`[${job.jobId}] exact copy:`, JSON.stringify(exact.stats))
+      } catch (error) {
+        // Pages too large to store as markup are rebuilt as typed sections instead.
+        if (!(error instanceof PageTooLargeError)) throw error
+        const shot = await capture(job.url)
+        const facts = extractFromHtml(shot.html, shot.finalUrl)
+        if (job.ai === "agent") {
+          // Created by an agent over MCP: it rebuilds the page with its own model.
+          console.warn(`[${job.jobId}] ${error.message}; handing the rebuild to the agent`)
+          await handOff(job.jobId, shot, describeCapture(shot, facts))
+          return true
+        }
+        console.warn(`[${job.jobId}] ${error.message}; rebuilding with AI instead`)
+        await step("Page too large to copy exactly, rebuilding with AI")
+        await step("Rebuilding sections with AI")
+        const rebuilt = await reconstruct(shot, facts, { model: job.model, effort: job.effort })
+        usage = rebuilt.usage
+        console.log(`[${job.jobId}] ${usage.inputTokens} in / ${usage.outputTokens} out tokens, $${usage.costUsd?.toFixed(4) ?? "?"}`)
+        doc = rebuilt.doc
+      }
     }
     await step("Copying images and fonts")
     doc = await mirrorAssets(doc, job.projectId)

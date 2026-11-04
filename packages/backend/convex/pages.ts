@@ -263,6 +263,7 @@ export async function insertPages(
       model: project.model,
       effort: project.effort,
       ai: options.ai,
+      template: project.template,
       status: "queued",
       attempts: 0,
       createdAt: options.now,

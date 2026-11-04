@@ -7,7 +7,7 @@ import { deleteChat } from "./chats"
 import { mutation, query } from "./_generated/server"
 import { ensurePages, listPages, ownedProject, requireProject, requireUser, setPageState, sitesRootDomain, syncProjectStatus, slugify, viewerProjects } from "./lib"
 import { insertPages } from "./pages"
-import { aiEffort, aiMode, aiModel } from "./models"
+import { aiEffort, aiMode, aiModel, templateId } from "./models"
 
 // Subdomains of SITES_ROOT_DOMAIN the platform itself uses (DNS-only records
 // that bypass the edge worker), so a project slug must never take one.
@@ -37,7 +37,8 @@ export const get = query({
  * are the pages of the same site to clone with it (from pages.discover); the
  * URL itself is always the home page. Agents pass `ai: "agent"` so a page too
  * large to copy is handed back to them to rebuild with their own model
- * instead of the platform's.
+ * instead of the platform's. With `template`, the site is revamped instead of
+ * copied: every page is rebuilt by AI in that design template.
  */
 export const create = mutation({
   args: {
@@ -46,6 +47,7 @@ export const create = mutation({
     model: v.optional(aiModel),
     effort: v.optional(aiEffort),
     ai: v.optional(aiMode),
+    template: v.optional(templateId),
     pages: v.optional(v.array(v.object({ url: v.string(), title: v.optional(v.string()) }))),
   },
   handler: async (ctx, args) => {
@@ -79,6 +81,7 @@ export const create = mutation({
       sourceUrl: url.toString(),
       model: args.model,
       effort: args.effort,
+      template: args.template,
       status: "cloning",
       step: "Queued",
       createdAt: now,
@@ -118,12 +121,48 @@ export const reclone = mutation({
         model: project.model,
         effort: project.effort,
         ai,
+        template: project.template,
         status: "queued",
         attempts: 0,
         createdAt: now,
       })
       await setPageState(ctx, projectId, page.path, { status: "cloning", step: "Queued" })
     }
+  },
+})
+
+/**
+ * Revamp a project's site in a design template, or go back to exact copies
+ * with `template: null`. Every page is rebuilt from the original site and its
+ * draft replaced; earlier published versions stay in the history to roll back to.
+ */
+export const revamp = mutation({
+  args: { projectId: v.id("projects"), template: v.union(templateId, v.null()), ai: v.optional(aiMode) },
+  handler: async (ctx, { projectId, template, ai }) => {
+    const project = await requireProject(ctx, projectId)
+    await ensurePages(ctx, project)
+    const pages = await listPages(ctx, project)
+    if (pages.some((p) => p.status === "cloning")) {
+      throw new ConvexError("Wait for the pages being cloned to finish first")
+    }
+    await ctx.db.patch(projectId, { template: template ?? undefined })
+    const now = Date.now()
+    for (const page of pages) {
+      await ctx.db.insert("jobs", {
+        projectId,
+        path: page.path,
+        url: page.sourceUrl,
+        model: project.model,
+        effort: project.effort,
+        ai,
+        template: template ?? undefined,
+        status: "queued",
+        attempts: 0,
+        createdAt: now,
+      })
+      await setPageState(ctx, projectId, page.path, { status: "cloning", step: "Queued" })
+    }
+    await syncProjectStatus(ctx, projectId)
   },
 })
 

@@ -11,6 +11,7 @@ import {
   type Section,
   type SectionType,
 } from "./schema"
+import { applyTemplate, DESIGN_TEMPLATES, getTemplate, TEMPLATE_IDS } from "./designs"
 
 // Edit operations are the only way a draft changes. Every editing surface (the
 // visual inspector, the AI chat, external MCP clients) produces these, and the
@@ -106,6 +107,10 @@ export const OP_DEFINITIONS = {
     description:
       "Change global design tokens: colors, fonts (also list new fonts in googleFonts), corner radius or max width.",
     input: PartialTheme,
+  },
+  apply_template: {
+    description: `Restyle the page in a design template: replaces the theme (colors, fonts, radius) and section backgrounds, spacing and animations, and keeps all content. Only typed sections change; html sections of exact clones keep their original look. Templates: ${DESIGN_TEMPLATES.map((t) => `${t.id} (${t.description})`).join("; ")}`,
+    input: z.object({ template: z.enum(TEMPLATE_IDS) }),
   },
   update_meta: {
     description: "Change SEO metadata: title, description, favicon, social image, language.",
@@ -251,6 +256,14 @@ function applyOne(doc: PageDoc, op: Op): string {
       }
       delete (doc.theme as Record<string, unknown>).op
       return "Updated theme"
+    }
+    case "apply_template": {
+      const template = getTemplate(op.template)
+      if (!template) throw new OpError(`No template "${op.template}"`)
+      const styled = applyTemplate(doc, template)
+      doc.theme = styled.theme
+      doc.sections = styled.sections
+      return `Applied the ${template.name} template`
     }
     case "update_meta": {
       const { op: _op, ...meta } = op

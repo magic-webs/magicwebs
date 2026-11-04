@@ -118,6 +118,7 @@ function Shell({ section, children, className = "" }: { section: Section; childr
       data-section-id={section.id}
       data-section-type={section.type}
       data-align={s.align}
+      data-ink={s.color ? "" : undefined}
       data-animate={section.animation && section.animation !== "none" ? section.animation : undefined}
       className={`mw-section ${s.fullBleed ? "mw-full " : ""}${className}`}
       style={style}

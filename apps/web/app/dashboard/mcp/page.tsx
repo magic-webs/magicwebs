@@ -74,7 +74,8 @@ const CLIENTS = [
 
 const CORE_TOOLS = [
   { name: "list_projects", description: "List projects with their ids, status and live hostname." },
-  { name: "clone_landing_page", description: "Clone a public URL into a new editable project. Runs in the background." },
+  { name: "clone_landing_page", description: "Clone a public URL into a new editable project, or revamp it in a design template. Runs in the background." },
+  { name: "revamp_site", description: "Redesign an existing project's site in a design template from the original content." },
   { name: "get_rebuild_brief", description: "Screenshots and structure of a page too large to copy, for your agent to rebuild." },
   { name: "submit_rebuilt_page", description: "Save the page your agent rebuilt from a brief." },
   { name: "get_page_outline", description: "The page's sections with their ids and types." },

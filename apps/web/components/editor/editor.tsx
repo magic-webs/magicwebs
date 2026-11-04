@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 
 import { ChatPanel } from "./chat-panel"
 import { DomainsDialog } from "./domains-dialog"
+import { ExportButton } from "./export-button"
 import { Inspector } from "./inspector"
 import { PageSwitcher } from "./page-switcher"
 import { PreviewFrame, type Device } from "./preview-frame"
@@ -121,6 +122,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
         </div>
 
         <div className="ml-auto flex items-center gap-1">
+          <ExportButton projectId={projectId} name={project.name} slug={project.slug} />
           <DomainsDialog projectId={projectId} />
           <VersionsDialog projectId={projectId} publishedVersionId={project.publishedVersionId} />
           {project.publishedVersionId && (

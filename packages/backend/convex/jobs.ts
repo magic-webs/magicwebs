@@ -65,6 +65,7 @@ export const claim = mutation({
       model: job.model,
       effort: job.effort,
       ai: job.ai ?? "platform",
+      template: job.template,
     }
   },
 })
@@ -101,7 +102,7 @@ export const complete = mutation({
       revision: draft.revision + 1,
       source: "clone",
       ops: [],
-      results: [`Cloned ${job.url}`],
+      results: [job.template ? `Revamped ${job.url} in the ${job.template} template` : `Cloned ${job.url}`],
       createdAt: now,
     })
     await clearBriefs(ctx, job.projectId, path)
@@ -156,9 +157,22 @@ export const handOff = mutation({
     if (!job) throw new ConvexError("Job not found")
     const path = job.path ?? HOME_PATH
     await clearBriefs(ctx, job.projectId, path)
-    await ctx.db.insert("rebuildBriefs", { projectId: job.projectId, jobId, path, url, screenshots, text, createdAt: Date.now() })
+    await ctx.db.insert("rebuildBriefs", {
+      projectId: job.projectId,
+      jobId,
+      path,
+      url,
+      template: job.template,
+      screenshots,
+      text,
+      createdAt: Date.now(),
+    })
     await ctx.db.patch(jobId, { status: "awaiting_agent" })
-    await setPageState(ctx, job.projectId, path, { step: "Too large to copy exactly. Waiting for your agent to rebuild it" })
+    await setPageState(ctx, job.projectId, path, {
+      step: job.template
+        ? "Waiting for your agent to revamp it"
+        : "Too large to copy exactly. Waiting for your agent to rebuild it",
+    })
   },
 })
 

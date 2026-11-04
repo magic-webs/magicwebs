@@ -31,20 +31,35 @@ export const latestForProject = query({
 
 /** Claim the oldest queued job, or a running job whose worker went silent. */
 export const claim = mutation({
-  args: { secret: v.string(), workerId: v.string() },
-  handler: async (ctx, { secret, workerId }) => {
+  args: {
+    secret: v.string(),
+    workerId: v.string(),
+    /**
+     * Workers that can revamp pages in a design template say so. Workers built
+     * before revamps would copy such a page exactly and ignore its template, so
+     * they only get plain clones.
+     */
+    revamps: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { secret, workerId, revamps }) => {
     assertWorker(secret)
     const now = Date.now()
 
     let job = await ctx.db
       .query("jobs")
       .withIndex("by_status", (q) => q.eq("status", "queued"))
+      .filter((q) => (revamps ? true : q.eq(q.field("template"), undefined)))
       .first()
     if (!job) {
       job = await ctx.db
         .query("jobs")
         .withIndex("by_status", (q) => q.eq("status", "running"))
-        .filter((q) => q.lt(q.field("claimedAt"), now - STALE_AFTER_MS))
+        .filter((q) =>
+          q.and(
+            q.lt(q.field("claimedAt"), now - STALE_AFTER_MS),
+            revamps ? true : q.eq(q.field("template"), undefined),
+          ),
+        )
         .first()
     }
     if (!job) return null

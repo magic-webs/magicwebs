@@ -1,11 +1,12 @@
-import { ConvexError, v } from "convex/values"
+import { ConvexError, v, type ObjectType } from "convex/values"
 
 import { HOME_PATH, MAX_SITE_PAGES } from "@magicwebs/page-schema"
 
 import { internal } from "./_generated/api"
+import type { Id } from "./_generated/dataModel"
 import { deleteChat } from "./chats"
-import { mutation, query } from "./_generated/server"
-import { ensurePages, listPages, ownedProject, requireProject, requireUser, setPageState, sitesRootDomain, syncProjectStatus, slugify, viewerProjects } from "./lib"
+import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server"
+import { ensurePages, findUserByEmail, listPages, ownedProject, requireProject, requireUser, setPageState, sitesRootDomain, syncProjectStatus, slugify, viewerProjects } from "./lib"
 import { insertPages } from "./pages"
 import { aiEffort, aiMode, aiModel, templateId } from "./models"
 
@@ -32,6 +33,16 @@ export const get = query({
   },
 })
 
+const createArgs = {
+  url: v.string(),
+  name: v.optional(v.string()),
+  model: v.optional(aiModel),
+  effort: v.optional(aiEffort),
+  ai: v.optional(aiMode),
+  template: v.optional(templateId),
+  pages: v.optional(v.array(v.object({ url: v.string(), title: v.optional(v.string()) }))),
+}
+
 /**
  * Create a project from a public URL and queue its pages to be cloned. `pages`
  * are the pages of the same site to clone with it (from pages.discover); the
@@ -41,65 +52,72 @@ export const get = query({
  * copied: every page is rebuilt by AI in that design template.
  */
 export const create = mutation({
-  args: {
-    url: v.string(),
-    name: v.optional(v.string()),
-    model: v.optional(aiModel),
-    effort: v.optional(aiEffort),
-    ai: v.optional(aiMode),
-    template: v.optional(templateId),
-    pages: v.optional(v.array(v.object({ url: v.string(), title: v.optional(v.string()) }))),
-  },
-  handler: async (ctx, args) => {
-    const userId = await requireUser(ctx)
-    if ((args.pages?.length ?? 0) + 1 > MAX_SITE_PAGES * 2) throw new ConvexError("Too many pages")
-    let url: URL
-    try {
-      url = new URL(/^https?:\/\//i.test(args.url) ? args.url : `https://${args.url}`)
-    } catch {
-      throw new ConvexError("That doesn't look like a valid URL")
-    }
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      throw new ConvexError("Only http and https URLs are supported")
-    }
+  args: createArgs,
+  handler: async (ctx, args) => createProject(ctx, await requireUser(ctx), args),
+})
 
-    const base = slugify(url.hostname)
-    let slug = base
-    while (
-      RESERVED_SLUGS.has(slug) ||
-      (await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", slug)).first())
-    ) {
-      slug = `${base}-${Math.random().toString(36).slice(2, 6)}`
-    }
-
-    const now = Date.now()
-    const name = args.name?.trim() || url.hostname.replace(/^www\./, "")
-    const projectId = await ctx.db.insert("projects", {
-      userId,
-      name,
-      slug,
-      sourceUrl: url.toString(),
-      model: args.model,
-      effort: args.effort,
-      template: args.template,
-      status: "cloning",
-      step: "Queued",
-      createdAt: now,
-    })
-    const project = (await ctx.db.get(projectId))!
-    const others = (args.pages ?? []).filter((p) => p.url !== url.toString())
-    await insertPages(ctx, project, [{ url: url.toString(), title: "Home" }, ...others], { now, ai: args.ai })
-    await syncProjectStatus(ctx, projectId)
-    await ctx.db.insert("domains", {
-      projectId,
-      hostname: `${slug}.${sitesRootDomain()}`,
-      kind: "subdomain",
-      status: "active",
-      createdAt: now,
-    })
-    return projectId
+/**
+ * Create a project for the account with this email, as `create` does for the
+ * signed-in user. For support and testing.
+ * Run with: bunx convex run projects:createFor '{"email":"you@example.com","url":"https://example.com","template":"minimal"}'
+ */
+export const createFor = internalMutation({
+  args: { ...createArgs, email: v.string() },
+  handler: async (ctx, { email, ...args }) => {
+    const user = await findUserByEmail(ctx, email)
+    if (!user) throw new ConvexError(`No account with email ${email}`)
+    return createProject(ctx, user._id, args)
   },
 })
+
+async function createProject(ctx: MutationCtx, userId: Id<"users">, args: ObjectType<typeof createArgs>) {
+  if ((args.pages?.length ?? 0) + 1 > MAX_SITE_PAGES * 2) throw new ConvexError("Too many pages")
+  let url: URL
+  try {
+    url = new URL(/^https?:\/\//i.test(args.url) ? args.url : `https://${args.url}`)
+  } catch {
+    throw new ConvexError("That doesn't look like a valid URL")
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new ConvexError("Only http and https URLs are supported")
+  }
+
+  const base = slugify(url.hostname)
+  let slug = base
+  while (
+    RESERVED_SLUGS.has(slug) ||
+    (await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", slug)).first())
+  ) {
+    slug = `${base}-${Math.random().toString(36).slice(2, 6)}`
+  }
+
+  const now = Date.now()
+  const name = args.name?.trim() || url.hostname.replace(/^www\./, "")
+  const projectId = await ctx.db.insert("projects", {
+    userId,
+    name,
+    slug,
+    sourceUrl: url.toString(),
+    model: args.model,
+    effort: args.effort,
+    template: args.template,
+    status: "cloning",
+    step: "Queued",
+    createdAt: now,
+  })
+  const project = (await ctx.db.get(projectId))!
+  const others = (args.pages ?? []).filter((p) => p.url !== url.toString())
+  await insertPages(ctx, project, [{ url: url.toString(), title: "Home" }, ...others], { now, ai: args.ai })
+  await syncProjectStatus(ctx, projectId)
+  await ctx.db.insert("domains", {
+    projectId,
+    hostname: `${slug}.${sitesRootDomain()}`,
+    kind: "subdomain",
+    status: "active",
+    createdAt: now,
+  })
+  return projectId
+}
 
 /**
  * Clone pages again from the original site, replacing their drafts: one page

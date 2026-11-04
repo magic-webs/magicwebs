@@ -27,6 +27,18 @@ export async function requireUser(ctx: QueryCtx): Promise<Id<"users">> {
   return userId
 }
 
+/** The account with this email. Sign-up stores the email as typed, so try that before the lowercase form. */
+export async function findUserByEmail(ctx: QueryCtx, email: string): Promise<Doc<"users"> | null> {
+  for (const candidate of new Set([email.trim(), email.trim().toLowerCase()])) {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", candidate))
+      .first()
+    if (user) return user
+  }
+  return null
+}
+
 /** The project if the signed-in user owns it, else null. */
 export async function ownedProject(ctx: QueryCtx, projectId: Id<"projects">): Promise<Doc<"projects"> | null> {
   const userId = await getViewer(ctx)

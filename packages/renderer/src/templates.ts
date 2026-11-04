@@ -15,6 +15,7 @@ ${R} .mw-section[data-ink] .mw-btn-primary{background:var(--mw-bg);color:var(--m
 ${R} .mw-section[data-ink] .mw-btn-secondary{border-color:currentColor}
 ${R} .mw-section[data-ink] :is(.mw-eyebrow,.mw-stat-value,.mw-inline-stat){color:inherit}
 ${R} .mw-eyebrow{width:fit-content}
+${R} .mw-grid>*>img.mw-media{width:100%;aspect-ratio:4/3;object-fit:cover}
 ${R} .mw-center .mw-eyebrow{margin-left:auto;margin-right:auto}
 `
 

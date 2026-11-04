@@ -16,7 +16,7 @@ const convex = new ConvexHttpClient(env.convexUrl)
 const secret = env.workerSecret
 
 async function runOnce(): Promise<boolean> {
-  const job = await convex.mutation(api.jobs.claim, { secret, workerId: env.workerId })
+  const job = await convex.mutation(api.jobs.claim, { secret, workerId: env.workerId, revamps: true })
   if (!job) return false
 
   const step = (label: string) => convex.mutation(api.jobs.progress, { secret, jobId: job.jobId, step: label })

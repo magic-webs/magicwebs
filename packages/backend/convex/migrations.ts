@@ -2,7 +2,7 @@ import { internal } from "./_generated/api"
 import { v } from "convex/values"
 
 import { internalMutation } from "./_generated/server"
-import { sitesRootDomain } from "./lib"
+import { findUserByEmail, sitesRootDomain } from "./lib"
 
 // Platform subdomains are stored when a project is created, so changing
 // SITES_ROOT_DOMAIN leaves older projects on the previous root. This moves
@@ -35,14 +35,7 @@ export const moveSubdomainsToRoot = internalMutation({
 export const claimProjects = internalMutation({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
-    // Sign-up stores the email as typed, so try that before the lowercase form.
-    let user = null
-    for (const candidate of new Set([email.trim(), email.trim().toLowerCase()])) {
-      user ??= await ctx.db
-        .query("users")
-        .withIndex("email", (q) => q.eq("email", candidate))
-        .first()
-    }
+    const user = await findUserByEmail(ctx, email)
     if (!user) throw new Error(`No account with email ${email}; sign up first`)
     let claimed = 0
     for (const project of await ctx.db.query("projects").collect()) {

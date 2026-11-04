@@ -2,7 +2,7 @@ import { authTables } from "@convex-dev/auth/server"
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
-import { aiEffort, aiMode, aiModel, aiUsage, templateId } from "./models"
+import { aiEffort, aiMode, aiModel, aiUsage, storedTemplateId } from "./models"
 
 // Page documents are stored as `v.any()` and validated with the shared Zod
 // schema from @magicwebs/page-schema, which is the real contract.
@@ -36,7 +36,7 @@ export default defineSchema({
      * Set on revamps: every page is rebuilt by AI in this design template
      * instead of being copied exactly.
      */
-    template: v.optional(templateId),
+    template: v.optional(storedTemplateId),
     /** Usage of the latest successful rebuild. */
     usage: v.optional(aiUsage),
     status: v.union(v.literal("cloning"), v.literal("ready"), v.literal("failed")),
@@ -123,7 +123,7 @@ export default defineSchema({
     /** Whose AI rebuilds the page when it is too large to copy; defaults to the platform's. */
     ai: v.optional(aiMode),
     /** Revamp the page in this template instead of copying it. */
-    template: v.optional(templateId),
+    template: v.optional(storedTemplateId),
     status: v.union(
       v.literal("queued"),
       v.literal("running"),
@@ -151,7 +151,7 @@ export default defineSchema({
     path: v.optional(v.string()),
     url: v.string(),
     /** Set when the page is to be revamped in this template rather than rebuilt as it is. */
-    template: v.optional(templateId),
+    template: v.optional(storedTemplateId),
     screenshots: v.array(v.id("_storage")),
     text: v.string(),
     createdAt: v.number(),

@@ -20,7 +20,22 @@ export const aiEffort = v.union(
 export const aiMode = v.union(v.literal("platform"), v.literal("agent"))
 
 /** A design template a site is revamped in (see DESIGN_TEMPLATES in @magicwebs/page-schema). */
-export const templateId = v.union(v.literal("minimal"), v.literal("midnight"), v.literal("editorial"), v.literal("playful"))
+export const templateId = v.union(
+  v.literal("minimal"),
+  v.literal("glass"),
+  v.literal("corporate"),
+  v.literal("editorial"),
+  v.literal("luxe"),
+  v.literal("fresh"),
+  v.literal("playful"),
+)
+
+/**
+ * What stored rows may hold: the current templates plus retired ones (see
+ * RETIRED_TEMPLATES), which `migrations:retireTemplate` moves rows off.
+ * New projects and revamps only accept `templateId`.
+ */
+export const storedTemplateId = v.union(templateId, v.literal("midnight"))
 
 /** Tokens and USD cost of one rebuild, summed over its retries. */
 export const aiUsage = v.object({

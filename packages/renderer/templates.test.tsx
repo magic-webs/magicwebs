@@ -62,12 +62,12 @@ test("applyTemplate replaces the old design and keeps content and layout choices
 })
 
 test("apply_template restyles a typed page and leaves exact clones' markup alone", async () => {
-  const { doc, results } = applyOps(typedPage(), [{ op: "apply_template", template: "midnight" }])
-  expect(results).toEqual(["Applied the Midnight template"])
-  expect(doc.theme.template).toBe("midnight")
+  const { doc, results } = applyOps(typedPage(), [{ op: "apply_template", template: "glass" }])
+  expect(results).toEqual(["Applied the Glass template"])
+  expect(doc.theme.template).toBe("glass")
   const html = await new Response(await renderPage(doc, { url: "https://acme.test/" })).text()
-  expect(html).toContain("Space+Grotesk")
-  expect(html).toContain("background-clip:text")
+  expect(html).toContain("Inter+Tight")
+  expect(html).toContain("backdrop-filter:blur(24px)")
 
   const exact = applyOps(
     { ...emptyPageDoc(), styles: { css: ".a{}" } },
@@ -105,4 +105,9 @@ test("feature icons are line icons, and templates replace emojis with them", asy
     expect(html.match(/<svg[^>]*viewBox="0 0 24 24"/g)?.length).toBe(2)
     expect(html).not.toContain("📊")
   }
+})
+
+test("retired templates resolve to their replacement", () => {
+  expect(getTemplate("midnight")?.id).toBe("glass")
+  expect(getTemplate("nope")).toBeUndefined()
 })

@@ -53,8 +53,9 @@ export function ProjectActions({ project, className }: { project: Project; class
   const remove = useMutation(api.projects.remove)
   const revamp = useMutation(api.projects.revamp)
   const [dialog, setDialog] = useState<"rename" | "reclone" | "revamp" | "delete" | null>(null)
-  const [template, setTemplate] = useState<TemplateId | null>(project.template ?? null)
+  // A retired template resolves to the one that replaced it.
   const current = getTemplate(project.template)
+  const [template, setTemplate] = useState<TemplateId | null>(current?.id ?? null)
   const [name, setName] = useState(project.name)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

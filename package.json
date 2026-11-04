@@ -15,6 +15,7 @@
     "dev:edge": "bun --filter @magicwebs/edge dev",
     "secrets": "bun scripts/generate-secrets.ts",
     "export-kit": "bun scripts/build-export-kit.ts",
+    "icons": "bun scripts/build-icons.ts",
     "test": "bun test",
     "typecheck": "bun run --filter '*' typecheck"
   },

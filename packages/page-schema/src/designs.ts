@@ -1,5 +1,6 @@
 import type { PageDoc, Section, SectionStyle, SectionType, Theme } from "./schema"
 import { SECTION_TYPES } from "./schema"
+import { ICON_RULE, iconFor } from "./icons"
 
 // Design templates for revamps. A revamp keeps a site's content (text, images,
 // links) and rebuilds it as typed sections in one of these designs. A template
@@ -192,7 +193,8 @@ Structure:
 - Section types: ${SECTION_TYPES.filter((t) => t !== "html" && t !== "custom").join(", ")}. Use only these typed sections: never "html" or "custom", and no top-level "styles".
 - Start with a navbar (at most 6 links and one CTA) and a hero (layout "${template.layout.hero}" unless the content clearly suits another), end with a cta and a footer.
 - Regroup the original's blocks into the section that presents them best, in a logical story: hero, social proof (logos, stats), features or services, deeper content sections, testimonials, pricing, FAQ, closing CTA. Merge scattered fragments; don't keep the original's layout when a typed section reads better.
-- Features: variant "${template.layout.features}" unless the content needs another; 3 columns for 3, 6 or 9 items, 2 or 4 otherwise; an emoji icon per item when there is no image.
+- Features: variant "${template.layout.features}" unless the content needs another; 3 columns for 3, 6 or 9 items, 2 or 4 otherwise; an icon per item when there is no image.
+- ${ICON_RULE}
 - Content sections: alternate imagePosition right and left down the page.
 - Wrap one or two key words of the hero heading in **double asterisks** to highlight them.
 - Leave style and animation empty: the template sets section backgrounds, spacing and animation.
@@ -240,6 +242,10 @@ export function applyTemplate(doc: PageDoc, template: DesignTemplate): PageDoc {
       next.animation = type === "hero" ? "none" : template.layout.animation
     }
     if (next.type === "navbar") next.props.sticky = template.layout.stickyNav
+    if (next.type === "features") {
+      // Templates draw line icons in their own colors; emojis would clash.
+      for (const item of next.props.items) item.icon = iconFor(item.icon)
+    }
     if (next.type === "hero" && next.props.layout === "image-background" && !next.props.image) {
       next.props.layout = template.layout.hero
     }

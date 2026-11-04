@@ -1,3 +1,4 @@
+import { ICON_RULE } from "./icons"
 import { SECTION_TYPES } from "./schema"
 
 /**
@@ -15,6 +16,7 @@ Reproduce the original as faithfully as the registry allows:
 - Theme: take colors from the computed styles (convert rgb() to hex), the heading and body font families as they appear, and list the ones that are Google Fonts in googleFonts. Estimate radius from button border-radius.
 - Per-section style: set background, text color and paddingY when they differ from the theme, so alternating backgrounds and dark sections match the screenshots.
 - Words in a heading or eyebrow that have their own color (e.g. one green word in a black heading): wrap them in **double asterisks** and set theme.colors.highlight to that color.
+- ${ICON_RULE}
 - Set style.align to "center" for sections whose text is centered in the screenshots.
 - Short figure rows inside a text block (e.g. "60% Query Resolved", "24x7 Support") go in the content section's stats, not in bullets.
 - Image grids with a label under each image: use gallery with each image's caption.

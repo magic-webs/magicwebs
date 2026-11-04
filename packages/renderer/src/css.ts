@@ -71,7 +71,8 @@ export function pageCss(theme: Theme): string {
 .mw-split.mw-reverse>:first-child{order:2}
 .mw-grid{display:grid;gap:24px;grid-template-columns:repeat(var(--mw-cols,3),minmax(0,1fr))}
 .mw-card{padding:28px;border:1px solid var(--mw-border);border-radius:calc(var(--mw-radius)*1.5);background:var(--mw-bg)}
-.mw-icon{font-size:1.6rem;line-height:1;margin-bottom:12px}
+.mw-icon{font-size:1.6rem;line-height:1;margin-bottom:12px;color:var(--mw-accent)}
+.mw-icon svg{display:block;width:1em;height:1em}
 .mw-nav{padding:16px 24px;background:var(--mw-bg);border-bottom:1px solid var(--mw-border);z-index:20}
 .mw-nav[data-sticky=true]{position:sticky;top:0}
 .mw-nav-inner{display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:var(--mw-max);margin:0 auto}

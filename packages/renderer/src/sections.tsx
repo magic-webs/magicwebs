@@ -1,8 +1,9 @@
 import type { CSSProperties, ReactNode } from "react"
 
-import { sanitizeCss, sanitizeHtml, type Element, type Image, type Link, type Section, type SectionOf, type SectionType } from "@magicwebs/page-schema"
+import { isIconName, sanitizeCss, sanitizeHtml, type Element, type Image, type Link, type Section, type SectionOf, type SectionType } from "@magicwebs/page-schema"
 
 import { cssValue } from "./css"
+import { Icon } from "./icon"
 
 // Crawled and AI-written content is untrusted: only let through URL schemes
 // that cannot execute script.
@@ -275,7 +276,7 @@ function Features({ section }: { section: SectionOf<"features"> }) {
             {item.image ? (
               <Img image={item.image} className="mw-media" />
             ) : (
-              item.icon && <div className="mw-icon">{item.icon}</div>
+              item.icon && <div className="mw-icon">{isIconName(item.icon) ? <Icon name={item.icon} /> : item.icon}</div>
             )}
             <h3 className="mw-h3" style={{ marginTop: item.image ? 16 : 0 }}>
               {item.title}

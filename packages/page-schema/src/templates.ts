@@ -39,9 +39,9 @@ export const SECTION_TEMPLATES: { [T in SectionType]: Extract<NewSection, { type
       columns: 3,
       variant: "cards",
       items: [
-        { icon: "⚡", title: "Fast", body: "Explain the first benefit." },
-        { icon: "🔒", title: "Secure", body: "Explain the second benefit." },
-        { icon: "🧩", title: "Flexible", body: "Explain the third benefit." },
+        { icon: "zap", title: "Fast", body: "Explain the first benefit." },
+        { icon: "lock", title: "Secure", body: "Explain the second benefit." },
+        { icon: "puzzle", title: "Flexible", body: "Explain the third benefit." },
       ],
     },
     animation: "fade-up",

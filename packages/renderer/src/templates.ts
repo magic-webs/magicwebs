@@ -27,7 +27,7 @@ ${R} :is(.mw-h2,.mw-h3){font-weight:650;letter-spacing:-.03em}
 ${R} .mw-eyebrow{padding:5px 12px;border:1px solid var(--mw-border);border-radius:999px;background:var(--mw-bg);color:var(--mw-muted-fg);font-weight:500;font-size:.82rem;letter-spacing:0;text-transform:none}
 ${R} .mw-btn{padding:11px 20px;font-weight:550}
 ${R} .mw-card{box-shadow:0 1px 2px rgba(0,0,0,.04)}
-${R} .mw-icon{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:calc(var(--mw-radius) + 2px);background:var(--mw-muted);font-size:1.25rem}
+${R} .mw-icon{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:calc(var(--mw-radius) + 2px);background:var(--mw-muted);color:var(--mw-fg);font-size:1.25rem}
 ${R} .mw-media{border:1px solid var(--mw-border);box-shadow:0 30px 60px -30px rgba(0,0,0,.22)}
 ${R} .mw-stat-value{color:var(--mw-fg);font-weight:700;letter-spacing:-.03em}
 ${R} .mw-hl{color:var(--mw-highlight)}
@@ -46,7 +46,7 @@ ${R} .mw-btn-primary{background:linear-gradient(135deg,var(--mw-primary),color-m
 ${R} .mw-btn-secondary{background:rgba(255,255,255,.04)}
 ${R} .mw-card{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01));transition:border-color .2s ease,transform .2s ease}
 ${R} .mw-card:hover{border-color:color-mix(in srgb,var(--mw-primary) 55%,var(--mw-border));transform:translateY(-2px)}
-${R} .mw-icon{display:inline-grid;place-items:center;width:46px;height:46px;border-radius:12px;border:1px solid var(--mw-border);background:linear-gradient(135deg,color-mix(in srgb,var(--mw-primary) 30%,transparent),transparent);font-size:1.2rem}
+${R} .mw-icon{display:inline-grid;place-items:center;width:46px;height:46px;border-radius:12px;border:1px solid var(--mw-border);background:linear-gradient(135deg,color-mix(in srgb,var(--mw-primary) 30%,transparent),transparent);color:var(--mw-highlight);font-size:1.3rem}
 ${R} .mw-media{border:1px solid var(--mw-border);box-shadow:0 0 0 6px rgba(255,255,255,.02),0 40px 120px -40px color-mix(in srgb,var(--mw-primary) 65%,transparent)}
 ${R} .mw-logos img{filter:brightness(0) invert(1);opacity:.6}
 ${R} .mw-plan[data-highlighted=true]{border-color:var(--mw-primary);box-shadow:0 0 0 1px var(--mw-primary),0 30px 80px -30px color-mix(in srgb,var(--mw-primary) 70%,transparent)}
@@ -72,7 +72,7 @@ ${R} .mw-plan[data-highlighted=true]{border-color:var(--mw-fg);box-shadow:none;b
 ${R} [data-section-type=features] .mw-grid{counter-reset:mw-f;gap:48px 40px}
 ${R} [data-section-type=features] .mw-grid>div::before{counter-increment:mw-f;content:counter(mw-f,decimal-leading-zero);display:block;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--mw-border);font-family:var(--mw-font-heading);font-size:1rem;color:var(--mw-accent)}
 ${R} [data-section-type=features] .mw-card::before{border-bottom:0;padding-bottom:0}
-${R} [data-section-type=features] .mw-icon{display:none}
+${R} .mw-icon{font-size:1.75rem;margin-bottom:16px;color:var(--mw-accent)}
 ${R} [data-section-type=testimonials] .mw-quote{font-family:var(--mw-font-heading);font-size:1.35rem;line-height:1.45;font-style:italic}
 ${R} .mw-stat-value{font-weight:400;color:inherit;font-size:clamp(2.6rem,5vw,4rem)}
 ${R} .mw-inline-stat{font-weight:500;color:inherit}
@@ -92,7 +92,7 @@ ${R} .mw-btn-secondary{background:var(--mw-bg);color:var(--mw-fg)}
 ${R} .mw-nav{border-bottom:2px solid var(--mw-border)}
 ${R} .mw-card{border:2px solid var(--mw-border);background:var(--mw-bg);box-shadow:6px 6px 0 var(--mw-border)}
 ${R} .mw-plan[data-highlighted=true]{background:var(--mw-muted);box-shadow:8px 8px 0 var(--mw-primary)}
-${R} .mw-icon{display:inline-grid;place-items:center;width:52px;height:52px;border:2px solid var(--mw-border);border-radius:14px;background:var(--mw-muted);font-size:1.5rem}
+${R} .mw-icon{display:inline-grid;place-items:center;width:52px;height:52px;border:2px solid var(--mw-border);border-radius:14px;background:var(--mw-muted);color:var(--mw-primary);font-size:1.5rem}
 ${R} .mw-media{border:2px solid var(--mw-border);box-shadow:8px 8px 0 var(--mw-border)}
 ${R} .mw-stat-value{color:var(--mw-primary)}
 ${R} .mw-checks li::before{color:var(--mw-primary)}

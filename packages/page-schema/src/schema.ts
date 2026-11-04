@@ -134,7 +134,7 @@ export const SectionPropsSchemas = {
     variant: z.enum(["cards", "plain", "list"]),
     items: z.array(
       z.object({
-        icon: z.string().optional().describe("An emoji or a short symbol"),
+        icon: z.string().optional().describe('Icon name from ICON_NAMES, e.g. "zap" or "shield-check"'),
         image: ImageSchema.optional(),
         title: z.string(),
         body: z.string(),

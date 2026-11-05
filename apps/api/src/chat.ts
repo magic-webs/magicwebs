@@ -31,6 +31,8 @@ const ChatRequest = z.object({
   path: z.string().optional(),
   message: z.object({ id: z.string(), role: z.literal("user"), parts: z.array(z.any()) }).passthrough(),
   selectedId: z.string().nullish(),
+  /** Sent from voice mode: the reply is read aloud. */
+  voice: z.boolean().optional(),
 })
 
 /** What each user message carries besides its text: the page as it was when it was sent. */
@@ -50,6 +52,7 @@ How to work:
 - Keep the page's existing voice and visual style unless asked to change it. When changing colors, keep text readable against its background.
 - Sections of type "html" are exact copies of the original site: real markup styled by the page stylesheet (styles.css), with the original hover effects and animations. Edit their text, links and images with edit_html, copying the find text exactly from get_section and keeping classes and data-mw-* attributes intact. Change their colors, fonts, spacing or hover effects by finding the rule with search_page_css and editing it with edit_page_css (or appending a more specific rule). Theme changes don't affect html sections. Never add <script> or inline event handlers; they are stripped.
 - Images must be absolute https URLs. Don't invent image URLs; if the user wants a new image and gives none, say so.
+- Files the user attaches are listed in <attachment> tags with their public URL, type and name; images and PDFs are also shown to you. Use those URLs as they are: images as an image src or background, videos in a <video> tag (muted, playsinline, with controls or autoplay loop) inside an html section, audio in an <audio controls> tag, fonts through an @font-face rule in edit_page_css. If it's unclear where an attachment should go, pick the most likely spot and say so.
 - If a request is ambiguous, make the most reasonable change and say what you assumed, rather than asking first.
 - Publish only when the user explicitly asks.
 - After editing, reply with one or two plain sentences saying what changed. No markdown headings or lists.`
@@ -70,11 +73,35 @@ function pageContext(doc: PageDoc, selectedId: string | null | undefined, page: 
   ].join("\n")
 }
 
-/** User messages as the model sees them: their text followed by the page context they were sent with. */
+/** Attachments the model can look at directly; the rest it knows only by URL. */
+const VISIBLE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"])
+
+const escapeAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")
+
+/**
+ * User messages as the model sees them: their text, each attachment as a tag
+ * with its URL (plus the file itself when the model can read it), then the
+ * page context they were sent with.
+ */
 function withContext(messages: ChatMessage[]): ChatMessage[] {
-  return messages.map((m) =>
-    m.role === "user" && m.metadata?.context ? { ...m, parts: [...m.parts, { type: "text", text: m.metadata.context }] } : m,
-  )
+  return messages.map((m) => {
+    if (m.role !== "user") return m
+    const parts: ChatMessage["parts"] = []
+    for (const part of m.parts) {
+      if (part.type !== "file") {
+        parts.push(part)
+        continue
+      }
+      if (!/^https:\/\//.test(part.url)) continue
+      if (VISIBLE_TYPES.has(part.mediaType)) parts.push(part)
+      parts.push({
+        type: "text",
+        text: `<attachment url="${escapeAttr(part.url)}" type="${escapeAttr(part.mediaType)}" name="${escapeAttr(part.filename ?? "")}" />`,
+      })
+    }
+    if (m.metadata?.context) parts.push({ type: "text", text: m.metadata.context })
+    return { ...m, parts }
+  })
 }
 
 /**
@@ -134,7 +161,13 @@ export async function handleChat(request: Request, convex: ConvexHttpClient): Pr
 
   const userMessage: ChatMessage = {
     ...(body.data.message as ChatMessage),
-    metadata: { context: pageContext(draft.doc, body.data.selectedId, page, pages) },
+    metadata: {
+      context:
+        pageContext(draft.doc, body.data.selectedId, page, pages) +
+        (body.data.voice
+          ? "\nThe user is talking in voice mode and your reply is read aloud: answer in one or two short spoken sentences, with no URLs, ids or symbols."
+          : ""),
+    },
   }
   const messages = [...history, userMessage]
 

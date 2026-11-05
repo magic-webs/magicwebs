@@ -77,7 +77,14 @@ Use [apps/crawler/.env.example](../apps/crawler/.env.example) as the template.
 CONVEX_URL=https://watchful-robin-407.convex.cloud
 AI_GATEWAY_API_KEY=<Vercel AI Gateway key>
 WEB_ORIGINS=https://build.magicwebs.ai
+R2_BUCKET=<same bucket as the crawler>
+R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=<token with Object Read & Write>
+R2_SECRET_ACCESS_KEY=<…>
+R2_PUBLIC_URL=https://assets.magicwebs.ai
 ```
+
+The `R2_*` values store the images, videos and files people attach in the AI chat. Without them, the chat's attach button reports that uploads aren't set up.
 
 `WEB_ORIGINS` lists the dashboard origins, comma-separated, that may call `/chat` from the browser. It must match the domain you give the web app on Vercel. `PORT` is set by the compose file.
 

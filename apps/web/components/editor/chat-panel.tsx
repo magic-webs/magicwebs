@@ -4,7 +4,21 @@ import { useChat } from "@ai-sdk/react"
 import { useAuthToken } from "@convex-dev/auth/react"
 import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from "ai"
 import { useMutation, useQuery } from "convex/react"
-import { ArrowUp, Check, MessageSquarePlus, RotateCcw, Square, SquareDashedMousePointer, TriangleAlert, Wrench, X } from "lucide-react"
+import {
+  ArrowUp,
+  AudioLines,
+  Check,
+  MessageSquarePlus,
+  Mic,
+  Paperclip,
+  RotateCcw,
+  Square,
+  SquareDashedMousePointer,
+  TriangleAlert,
+  Upload,
+  Wrench,
+  X,
+} from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
@@ -13,6 +27,10 @@ import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
+
+import { ACCEPT, AttachmentTray, MessageFile, useAttachments } from "./chat-attachments"
+import { useVoiceMode, type VoicePhase } from "./use-voice-mode"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787"
 
@@ -92,7 +110,13 @@ function Conversation({
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         // The server holds the conversation; send only the newest message.
         prepareSendMessagesRequest: ({ messages, body }) => ({
-          body: { projectId, path, message: messages.at(-1), selectedId: body?.selectedId ?? null },
+          body: {
+            projectId,
+            path,
+            message: messages.at(-1),
+            selectedId: body?.selectedId ?? null,
+            voice: body?.voice === true,
+          },
         }),
       }),
     [projectId, path, token],
@@ -104,17 +128,40 @@ function Conversation({
   })
   const clear = useMutation(api.chats.clear)
   const [input, setInput] = useState("")
+  const [dragging, setDragging] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
   const busy = status === "submitted" || status === "streaming"
+  const attachments = useAttachments({ apiUrl: API_URL, token: token ?? null, projectId })
+  const voice = useVoiceMode({ busy, onUtterance: (text) => send(text, true) })
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" })
   }, [messages, status])
 
-  function send(text: string) {
-    if (!text.trim() || busy) return
-    sendMessage({ text: text.trim() }, { body: { selectedId: selected?.id } })
-    setInput("")
+  // In voice mode, read each finished reply aloud.
+  const lastStatus = useRef(status)
+  const { on: voiceOn, speak } = voice
+  useEffect(() => {
+    const was = lastStatus.current
+    lastStatus.current = status
+    if (!voiceOn || (was !== "submitted" && was !== "streaming")) return
+    if (status === "error") return speak("Sorry, something went wrong with that reply.")
+    if (status !== "ready") return
+    const reply = messages.at(-1)
+    if (reply?.role !== "assistant") return
+    const text = reply.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(" ")
+    speak(text.trim() || "Done.")
+  }, [status, messages, voiceOn, speak])
+
+  function send(text: string, spoken = false) {
+    const clean = text.trim()
+    if (busy || attachments.uploading || (!clean && !attachments.ready)) return
+    const files = attachments.take()
+    const options = { body: { selectedId: selected?.id, voice: spoken } }
+    if (clean) sendMessage({ text: clean, files }, options)
+    else sendMessage({ files }, options)
+    if (!spoken) setInput("")
   }
 
   async function newChat() {
@@ -125,7 +172,31 @@ function Conversation({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="relative flex h-full min-h-0 flex-col"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return
+        e.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files.length) return
+        e.preventDefault()
+        setDragging(false)
+        attachments.add(e.dataTransfer.files)
+      }}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-2 z-20 grid place-items-center rounded-xl border-2 border-dashed border-primary/50 bg-background/90 text-sm">
+          <span className="flex flex-col items-center gap-2 text-muted-foreground">
+            <Upload className="size-5" />
+            Drop images, videos or files to attach them
+          </span>
+        </div>
+      )}
       {messages.length > 0 && (
         <div className="flex items-center justify-end border-b px-3 py-1.5">
           <Button variant="ghost" size="sm" onClick={newChat} disabled={busy}>
@@ -159,7 +230,11 @@ function Conversation({
         {messages.map((message) => (
           <div
             key={message.id}
-            className={message.role === "user" ? "ml-6 self-end rounded-xl bg-muted px-3 py-2" : "flex flex-col gap-2"}
+            className={
+              message.role === "user"
+                ? "ml-6 flex max-w-[calc(100%-1.5rem)] flex-col gap-2 self-end rounded-xl bg-muted px-3 py-2"
+                : "flex flex-col gap-2"
+            }
           >
             {message.parts.map((part, i) => {
               if (part.type === "text") {
@@ -171,6 +246,7 @@ function Conversation({
                   </p>
                 )
               }
+              if (part.type === "file") return <MessageFile key={i} part={part} />
               if (isToolUIPart(part)) {
                 const done = part.state === "output-available"
                 const failed =
@@ -244,10 +320,39 @@ function Conversation({
             </Button>
           </div>
         )}
+        {voice.error && (
+          <div className="flex items-center gap-1.5 text-xs text-destructive">
+            <TriangleAlert className="size-3.5 shrink-0" />
+            <span className="flex-1">{voice.error}</span>
+            <Button type="button" variant="ghost" size="icon-xs" onClick={voice.dismissError} aria-label="Dismiss">
+              <X />
+            </Button>
+          </div>
+        )}
+        {voice.on && (
+          <VoiceBar phase={voice.phase} interim={voice.interim} onSkip={voice.skipSpeech} onStop={voice.toggle} />
+        )}
+        <AttachmentTray items={attachments.items} onRemove={attachments.remove} />
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          accept={ACCEPT}
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) attachments.add(e.target.files)
+            e.target.value = ""
+          }}
+        />
         <div className="relative">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={(e) => {
+              if (e.clipboardData.files.length === 0) return
+              e.preventDefault()
+              attachments.add(e.clipboardData.files)
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault()
@@ -255,8 +360,34 @@ function Conversation({
               }
             }}
             placeholder={selected ? "Change the selected section…" : "Ask for a change…"}
-            className="max-h-40 min-h-20 resize-none pr-12"
+            className="max-h-40 min-h-24 resize-none pr-12 pb-10"
           />
+          <div className="absolute bottom-2 left-2 flex items-center gap-0.5">
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              onClick={() => fileInput.current?.click()}
+              disabled={attachments.full}
+              aria-label="Attach images, videos or files"
+              title="Attach images, videos or files"
+            >
+              <Paperclip />
+            </Button>
+            {voice.supported && (
+              <Button
+                type="button"
+                size="icon-sm"
+                variant={voice.on ? "secondary" : "ghost"}
+                onClick={voice.toggle}
+                aria-pressed={voice.on}
+                aria-label={voice.on ? "Turn off voice mode" : "Talk to the AI (voice mode)"}
+                title={voice.on ? "Turn off voice mode" : "Voice mode"}
+              >
+                {voice.on ? <AudioLines className="text-primary" /> : <Mic />}
+              </Button>
+            )}
+          </div>
           {busy ? (
             <Button
               type="button"
@@ -273,15 +404,63 @@ function Conversation({
               type="submit"
               size="icon-sm"
               className="absolute right-2 bottom-2"
-              disabled={!input.trim()}
+              disabled={attachments.uploading || (!input.trim() && !attachments.ready)}
               aria-label="Send"
             >
               <ArrowUp />
             </Button>
           )}
         </div>
-        <p className="text-[11px] text-muted-foreground">Enter to send, Shift+Enter for a new line.</p>
+        <p className="text-[11px] text-muted-foreground">
+          Enter to send, Shift+Enter for a new line. Drop or paste files to attach them.
+        </p>
       </form>
+    </div>
+  )
+}
+
+const PHASE_LABELS: Record<VoicePhase, string> = {
+  off: "",
+  listening: "Listening…",
+  waiting: "Working on it…",
+  speaking: "Speaking…",
+}
+
+/** What voice mode is doing, with what's being heard as the user speaks. */
+function VoiceBar({
+  phase,
+  interim,
+  onSkip,
+  onStop,
+}: {
+  phase: VoicePhase
+  interim: string
+  onSkip: () => void
+  onStop: () => void
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border bg-muted/50 py-1 pr-1 pl-2.5 text-xs" aria-live="polite">
+      <span className="relative flex size-2.5 shrink-0">
+        {phase === "listening" && <span className="absolute inset-0 animate-ping rounded-full bg-primary/60" />}
+        <span
+          className={cn(
+            "relative size-2.5 rounded-full",
+            phase === "listening" ? "bg-primary" : phase === "speaking" ? "bg-emerald-500" : "bg-muted-foreground/50",
+          )}
+        />
+      </span>
+      <span className="min-w-0 flex-1 truncate">
+        {interim ? <span className="italic">{interim}</span> : <span className="text-muted-foreground">{PHASE_LABELS[phase]}</span>}
+      </span>
+      {phase === "speaking" && (
+        <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onSkip}>
+          Skip
+        </Button>
+      )}
+      <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onStop}>
+        <Square className="size-3" />
+        End voice
+      </Button>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { cors } from "hono/cors"
 import { logger } from "hono/logger"
 
 import { bearer, clientForApiKey, clientForToken, isSignedIn } from "./auth"
+import { handleUpload } from "./assets"
 import { handleChat } from "./chat"
 import { env } from "./env"
 import { handleMcp } from "./mcp"
@@ -23,6 +24,18 @@ app.post("/chat", async (c) => {
   const convex = token ? clientForToken(token) : null
   if (!convex || !(await isSignedIn(convex))) return c.json({ error: "Sign in to use the AI chat" }, 401)
   return handleChat(c.req.raw, convex)
+})
+
+// Files attached in the AI chat, sent by the platform UI with its session token.
+app.use(
+  "/assets",
+  cors({ origin: env.webOrigins, allowMethods: ["POST"], allowHeaders: ["Content-Type", "Authorization"] }),
+)
+app.post("/assets", async (c) => {
+  const token = bearer(c.req.raw)
+  const convex = token ? clientForToken(token) : null
+  if (!convex || !(await isSignedIn(convex))) return c.json({ error: "Sign in to upload files" }, 401)
+  return handleUpload(c.req.raw, convex)
 })
 
 // MCP clients send a personal API key, created on the dashboard's MCP page.

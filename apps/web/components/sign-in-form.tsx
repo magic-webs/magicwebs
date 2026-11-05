@@ -6,7 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
-import { SparkleIcon } from "@/components/icons"
+import { BrandMark } from "@/components/brand-mark"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -73,9 +73,7 @@ export function SignInForm({ next }: { next: string }) {
     <main className="grid min-h-svh place-items-center bg-muted/40 px-4 py-10">
       <div className="flex w-full max-w-sm flex-col gap-6">
         <Link href="/" className="flex items-center gap-2 self-center font-semibold">
-          <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <SparkleIcon solid className="size-4" />
-          </span>
+          <BrandMark className="size-8 text-foreground" />
           Magicwebs
         </Link>
         <Card>

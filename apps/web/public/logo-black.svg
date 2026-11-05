@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Magicwebs</title>
+  <mask id="m">
+    <rect width="64" height="64" fill="#fff"/>
+    <rect x="9" y="22" width="36" height="29" rx="4" fill="#000"/>
+    <circle cx="11" cy="18" r="1.7" fill="#000"/>
+    <circle cx="16" cy="18" r="1.7" fill="#000"/>
+    <circle cx="21" cy="18" r="1.7" fill="#000"/>
+    <path d="M50 2.5C51.4 9.6 54.4 12.6 61.5 14C54.4 15.4 51.4 18.4 50 25.5C48.6 18.4 45.6 15.4 38.5 14C45.6 12.6 48.6 9.6 50 2.5Z" fill="#000" stroke="#000" stroke-width="6" stroke-linejoin="round"/>
+  </mask>
+  <g fill="#0a0a0a">
+    <rect x="4" y="13" width="46" height="43" rx="9" mask="url(#m)"/>
+    <rect x="13" y="26" width="28" height="8" rx="2" opacity="0.32"/>
+    <rect x="13" y="37.5" width="22" height="3.5" rx="1.75" opacity="0.6"/>
+    <rect x="13" y="44" width="16" height="3.5" rx="1.75" opacity="0.6"/>
+    <path d="M50 2.5C51.4 9.6 54.4 12.6 61.5 14C54.4 15.4 51.4 18.4 50 25.5C48.6 18.4 45.6 15.4 38.5 14C45.6 12.6 48.6 9.6 50 2.5Z" opacity="0.6"/>
+  </g>
+</svg>

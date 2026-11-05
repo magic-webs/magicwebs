@@ -14,8 +14,8 @@ import {
   PieChartIcon,
   ServerIcon,
   SettingsIcon,
-  SparkleIcon,
 } from "@/components/icons"
+import { BrandMark } from "@/components/brand-mark"
 import { Separator } from "@/components/ui/separator"
 import {
   Sidebar,
@@ -70,9 +70,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" render={<Link href="/" />} tooltip="Magicwebs home">
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
-                  <SparkleIcon solid className="size-4" />
-                </span>
+                <BrandMark className="size-8 shrink-0 text-foreground" />
                 <span className="flex flex-col leading-tight">
                   <span className="font-semibold">Magicwebs</span>
                   <span className="text-xs text-muted-foreground">Workspace</span>

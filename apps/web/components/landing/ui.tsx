@@ -1,9 +1,10 @@
 "use client"
 
-import { Check, ChevronRight, Copy, Sparkles } from "lucide-react"
+import { Check, ChevronRight, Copy } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
+import { BrandMark } from "@/components/brand-mark"
 import { cn } from "@/lib/utils"
 
 import s from "./landing.module.css"
@@ -11,9 +12,7 @@ import s from "./landing.module.css"
 export function Logo({ className }: { className?: string }) {
   return (
     <Link href="/" className={cn(s.logo, className)} aria-label="Magicwebs home">
-      <span className={s.logoMark}>
-        <Sparkles />
-      </span>
+      <BrandMark className={s.logoMark} />
       Magicwebs
     </Link>
   )

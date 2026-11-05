@@ -421,7 +421,8 @@ function Conversation({
 
 const PHASE_LABELS: Record<VoicePhase, string> = {
   off: "",
-  listening: "Listening…",
+  starting: "Opening the microphone…",
+  listening: "Listening… speak now",
   waiting: "Working on it…",
   speaking: "Speaking…",
 }

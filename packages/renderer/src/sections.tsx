@@ -274,11 +274,12 @@ function Features({ section }: { section: SectionOf<"features"> }) {
         {p.items.map((item, i) => (
           <div key={i} className={p.variant === "cards" ? "mw-card" : undefined} style={{ textAlign: "left" }}>
             {item.image ? (
-              <Img image={item.image} className="mw-media" />
+              // In a card the photo fills the card's top edge instead of sitting framed inside it.
+              <Img image={item.image} className={p.variant === "cards" ? "mw-card-media" : "mw-media"} />
             ) : (
               item.icon && <div className="mw-icon">{isIconName(item.icon) ? <Icon name={item.icon} /> : item.icon}</div>
             )}
-            <h3 className="mw-h3" style={{ marginTop: item.image ? 16 : 0 }}>
+            <h3 className="mw-h3" style={{ marginTop: item.image && p.variant !== "cards" ? 16 : 0 }}>
               {item.title}
             </h3>
             <p className="mw-muted" style={{ marginTop: 8 }}>
@@ -347,7 +348,7 @@ function Stats({ section }: { section: SectionOf<"stats"> }) {
         style={{ "--mw-cols": Math.min(p.items.length, 4), marginTop: p.heading ? 48 : 0, textAlign: "center" } as CSSProperties}
       >
         {p.items.map((item, i) => (
-          <div key={i}>
+          <div key={i} className="mw-card mw-stat">
             <div className="mw-stat-value">{item.value}</div>
             <div className="mw-muted">{item.label}</div>
           </div>

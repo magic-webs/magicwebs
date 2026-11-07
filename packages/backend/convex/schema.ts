@@ -248,6 +248,70 @@ export default defineSchema({
     .index("by_sender", ["projectId", "sender", "createdAt"])
     .index("by_delivery", ["projectId", "delivery"]),
 
+  /**
+   * One page view on a published site, sent by the edge's beacon. Raw views
+   * are kept for a few days; analytics.ts rolls them into analyticsDays, which
+   * the dashboard reads. No cookies and no IP address: `visitor` is a hash of
+   * the IP, browser and site with a salt that changes every day, so a visitor
+   * can be counted once a day and never followed across days.
+   */
+  pageviews: defineTable({
+    projectId: v.id("projects"),
+    /** UTC day, "YYYY-MM-DD". */
+    day: v.string(),
+    path: v.string(),
+    visitor: v.string(),
+    /** Hostname of the page the visitor came from, if it was another site. */
+    referrer: v.optional(v.string()),
+    utmSource: v.optional(v.string()),
+    utmMedium: v.optional(v.string()),
+    utmCampaign: v.optional(v.string()),
+    country: v.optional(v.string()),
+    city: v.optional(v.string()),
+    device: v.union(v.literal("desktop"), v.literal("mobile"), v.literal("tablet")),
+    browser: v.string(),
+    os: v.string(),
+    /** Time the page was visible, in ms; set when the visitor leaves. */
+    duration: v.optional(v.number()),
+    /** Deepest scroll, 0-100. */
+    scroll: v.optional(v.number()),
+    createdAt: v.number(),
+    /** Last change (the view, then its time on page), so a rollup knows which days moved. */
+    updatedAt: v.number(),
+  })
+    .index("by_project_time", ["projectId", "createdAt"])
+    .index("by_project_day", ["projectId", "day"])
+    .index("by_updated", ["updatedAt"])
+    .index("by_created", ["createdAt"]),
+
+  /** A site's traffic for one UTC day, rolled up from its page views. */
+  analyticsDays: defineTable({
+    projectId: v.id("projects"),
+    day: v.string(),
+    visitors: v.number(),
+    pageviews: v.number(),
+    /** Visitors who saw one page and left. */
+    bounces: v.number(),
+    /** Total and count of the page views whose time on page is known. */
+    durationMs: v.number(),
+    timedViews: v.number(),
+    /** The day's top entries, by page views (pages also by visitors). */
+    pages: v.array(v.object({ key: v.string(), views: v.number(), visitors: v.number() })),
+    referrers: v.array(v.object({ key: v.string(), count: v.number() })),
+    sources: v.array(v.object({ key: v.string(), count: v.number() })),
+    campaigns: v.array(v.object({ key: v.string(), count: v.number() })),
+    countries: v.array(v.object({ key: v.string(), count: v.number() })),
+    devices: v.array(v.object({ key: v.string(), count: v.number() })),
+    browsers: v.array(v.object({ key: v.string(), count: v.number() })),
+    os: v.array(v.object({ key: v.string(), count: v.number() })),
+    updatedAt: v.number(),
+  }).index("by_project_day", ["projectId", "day"]),
+
+  /** Where the analytics rollup got to, so each run only looks at what changed. */
+  analyticsState: defineTable({
+    rolledUpTo: v.number(),
+  }),
+
   /** Long strings of stored pages (exact clones' markup and CSS), see lib.ts. */
   blobs: defineTable({
     hash: v.string(),

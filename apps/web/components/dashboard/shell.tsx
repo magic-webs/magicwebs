@@ -15,6 +15,7 @@ import {
   PieChartIcon,
   ServerIcon,
   SettingsIcon,
+  WalletIcon,
 } from "@/components/icons"
 import { BrandMark } from "@/components/brand-mark"
 import { Separator } from "@/components/ui/separator"
@@ -42,10 +43,11 @@ import { ProfileMenu } from "./profile-menu"
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: HomeIcon },
   { href: "/dashboard/projects", label: "Projects", icon: FolderIcon, badge: "projects" as const },
+  { href: "/dashboard/analytics", label: "Analytics", icon: PieChartIcon },
   { href: "/dashboard/leads", label: "Leads", icon: ListIcon },
   { href: "/dashboard/domains", label: "Domains", icon: GlobeIcon },
   { href: "/dashboard/activity", label: "Activity", icon: ClockIcon },
-  { href: "/dashboard/usage", label: "Usage", icon: PieChartIcon },
+  { href: "/dashboard/usage", label: "Usage", icon: WalletIcon },
 ]
 
 const CONFIGURE = [

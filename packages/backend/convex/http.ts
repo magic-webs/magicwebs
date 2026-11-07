@@ -4,6 +4,7 @@ import { internal } from "./_generated/api"
 import { auth } from "./auth"
 import type { Id } from "./_generated/dataModel"
 import { httpAction } from "./_generated/server"
+import { dayOf, describeAgent } from "./analytics"
 
 // Read by the edge worker so a publish is live within seconds, without waiting
 // for Workers KV to propagate. Published pages are public, so no secret is needed.
@@ -97,6 +98,67 @@ http.route({
     if (status === "limited") return Response.json({ ok: false, error: "Too many submissions. Try again later." }, { status: 429 })
     if (status === "unknown") return Response.json({ ok: false }, { status: 404 })
     return Response.json({ ok: true })
+  }),
+})
+
+async function sha256Hex(text: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("")
+}
+
+const str = (value: unknown) => (typeof value === "string" ? value : undefined)
+
+// Page views and time on page from published sites, forwarded by the edge
+// worker's /__a route with the visitor's IP, user agent and location. The IP
+// only feeds the day's visitor hash and is never stored.
+http.route({
+  path: "/analytics/collect",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const text = await request.text()
+    if (text.length > 8_000) return Response.json({ ok: false }, { status: 413 })
+    let body: Record<string, unknown>
+    try {
+      body = JSON.parse(text)
+    } catch {
+      return Response.json({ ok: false }, { status: 400 })
+    }
+    const hostname = str(body.hostname)?.toLowerCase()
+    if (!hostname) return Response.json({ ok: false }, { status: 400 })
+
+    if (body.type === "engage") {
+      const id = str(body.id)
+      if (id && typeof body.duration === "number" && typeof body.scroll === "number") {
+        await ctx.runMutation(internal.analytics.recordEngagement, { hostname, id, duration: body.duration, scroll: body.scroll })
+      }
+      return Response.json({ ok: true })
+    }
+
+    const agent = describeAgent(str(body.ua) ?? "")
+    const path = str(body.path)
+    if (!agent || !path) return Response.json({ ok: true, id: null })
+    const salt = process.env.ANALYTICS_SALT ?? process.env.WORKER_SECRET ?? ""
+    const visitor = await sha256Hex(`${salt}|${dayOf(Date.now())}|${hostname}|${str(body.ip) ?? ""}|${str(body.ua)}`)
+    let referrer: string | undefined
+    try {
+      const ref = str(body.referrer) && new URL(str(body.referrer)!).hostname.replace(/^www\./, "")
+      if (ref && ref !== hostname.replace(/^www\./, "")) referrer = ref
+    } catch {
+      // Not a URL: leave it out.
+    }
+    const id = await ctx.runMutation(internal.analytics.recordView, {
+      hostname,
+      path,
+      visitor,
+      referrer,
+      utmSource: str(body.utmSource),
+      utmMedium: str(body.utmMedium),
+      utmCampaign: str(body.utmCampaign),
+      country: str(body.country),
+      city: str(body.city),
+      ...agent,
+    })
+    return Response.json({ ok: true, id })
   }),
 })
 

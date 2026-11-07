@@ -175,6 +175,13 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
         limit: Math.min((limit as number | undefined) ?? 50, 200),
       }),
   },
+  get_analytics: {
+    description:
+      "Get the published site's visitor analytics for the last `days` days (default 30, today included, UTC): visitors, page views, bounce rate, average time on page, leads and conversion, each with the period before for comparison, plus a row per day, top pages, referrers, UTM sources and campaigns, countries, devices, browsers, OS and who is on the site now. Visitors are counted once per day without cookies. Numbers lag up to 10 minutes; live visitors are real time.",
+    input: z.object({ days: z.number().optional() }),
+    run: async (convex, { projectId }, { days }) =>
+      convex.query(api.analytics.summary, { projectId, days: (days as number | undefined) ?? 30 }),
+  },
   list_versions: {
     description: "List published versions, newest first.",
     input: z.object({}),

@@ -181,6 +181,18 @@ if(ok){const d=document.createElement("p");d.className="mw-form-done";d.setAttri
 else{let e=f.querySelector(".mw-form-error");if(!e){e=document.createElement("p");e.className="mw-form-error";e.setAttribute("role","alert");f.appendChild(e)}e.textContent=msg||"Sorry, that didn't send. Please try again."}},true)})()</script>`
 }
 
+/**
+ * Visitor analytics, without cookies: a view when the page loads (with where
+ * the visitor came from), then how long the page was visible and how far it
+ * was scrolled, sent again each time the tab is hidden. See /__a.
+ */
+const ANALYTICS_SCRIPT = `<script>(()=>{if(navigator.webdriver)return;let id=null,since=Date.now(),seen=0,depth=0;const q=new URLSearchParams(location.search);
+fetch("/__a",{method:"POST",keepalive:true,headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"view",path:location.pathname,referrer:document.referrer,utmSource:q.get("utm_source")||q.get("ref")||undefined,utmMedium:q.get("utm_medium")||undefined,utmCampaign:q.get("utm_campaign")||undefined})}).then(r=>r.ok?r.json():null).then(d=>{id=d&&d.id}).catch(()=>{});
+const scroll=()=>{const h=document.documentElement,d=Math.min(100,Math.round((scrollY+innerHeight)/Math.max(h.scrollHeight,1)*100));if(d>depth)depth=d};addEventListener("scroll",scroll,{passive:true});scroll();
+const send=()=>{if(id)navigator.sendBeacon("/__a",JSON.stringify({type:"engage",id,duration:seen,scroll:depth}))};
+document.addEventListener("visibilitychange",()=>{if(document.hidden){seen+=Date.now()-since;send()}else since=Date.now()});
+addEventListener("pagehide",()=>{if(!document.hidden){seen+=Date.now()-since;since=Date.now()}send()})})()</script>`
+
 /** A short, stable fingerprint, so a change of widget settings misses the render cache. */
 function fingerprint(value: string): string {
   let hash = 2166136261
@@ -222,11 +234,49 @@ async function submitForm(request: Request, env: Env, hostname: string): Promise
   })
 }
 
+/** A page view or its time on page: add who and where from the request, and hand it to Convex. */
+async function collect(request: Request, env: Env, hostname: string, ctx: ExecutionContext): Promise<Response> {
+  const headers = { "Cache-Control": "no-store" }
+  const text = await request.text()
+  if (!env.CONVEX_SITE_URL || text.length > 4_000) return Response.json({ id: null }, { headers })
+  let body: Record<string, unknown>
+  try {
+    body = JSON.parse(text)
+  } catch {
+    return Response.json({ id: null }, { status: 400, headers })
+  }
+  const cf = (request as Request & { cf?: { country?: string; city?: string } }).cf
+  const forward = fetch(`${env.CONVEX_SITE_URL}/analytics/collect`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...body,
+      hostname,
+      ip: request.headers.get("CF-Connecting-IP") ?? undefined,
+      ua: request.headers.get("User-Agent") ?? "",
+      country: cf?.country,
+      city: cf?.city,
+    }),
+  })
+  // Time on page arrives as the visitor leaves; nobody waits for the answer.
+  if (body.type === "engage") {
+    ctx.waitUntil(forward.then(() => undefined, () => undefined))
+    return new Response(null, { status: 204, headers })
+  }
+  try {
+    const response = await forward
+    return Response.json(await response.json(), { headers })
+  } catch {
+    return Response.json({ id: null }, { headers })
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     const hostname = url.hostname.toLowerCase()
     if (request.method === "POST" && url.pathname === "/__forms") return submitForm(request, env, hostname)
+    if (request.method === "POST" && url.pathname === "/__a") return collect(request, env, hostname, ctx)
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } })
     }
@@ -285,7 +335,7 @@ export default {
     const doc = pages.length > 1 ? rewriteSiteLinks(stored, pages.filter((p) => p.source)) : stored
     const stream = await renderPage(doc, { url: `https://${hostname}${encodeURI(path)}` })
     const rendered = await new Response(stream).text()
-    const script = liveReloadScript(site.version) + formsScript(stopped) + widgetScript(widget, path, stored)
+    const script = liveReloadScript(site.version) + ANALYTICS_SCRIPT + formsScript(stopped) + widgetScript(widget, path, stored)
     const bodyEnd = rendered.lastIndexOf("</body>")
     const html = bodyEnd < 0 ? rendered + script : rendered.slice(0, bodyEnd) + script + rendered.slice(bodyEnd)
     const response = new Response(html, {

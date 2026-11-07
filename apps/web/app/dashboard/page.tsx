@@ -48,13 +48,13 @@ export default function OverviewPage() {
 
   return (
     <>
-      <PageHeader title="Overview" description="Start from any public page, then edit and publish it." />
+      <PageHeader title="Overview" description="Bring in your website, then edit and publish it." />
 
       <Card>
         <CardHeader>
           <CardTitle>Start from any website</CardTitle>
           <CardDescription>
-            Paste a URL. We copy the page with its CSS, fonts and animations into an editable project.
+            Enter your website&apos;s address. Keep its design or give it a fresh new look, then edit and publish.
           </CardDescription>
         </CardHeader>
         <CardContent>

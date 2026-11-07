@@ -92,6 +92,12 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
       return { total: matches.length, rules: matches.slice(0, 40).map((r) => (r.length > 1500 ? r.slice(0, 1500) + "…" : r)) }
     },
   },
+  get_page_js: {
+    description:
+      "Get the page's custom JavaScript (empty when it has none). Read it before changing it with edit_page_js so `find` matches exactly.",
+    input: z.object({}),
+    run: async (convex, target) => ({ script: (await loadDoc(convex, target)).script ?? "" }),
+  },
   apply_operations: {
     description:
       "Apply several edit operations atomically in one step (all succeed or none do). Each item is an object with an `op` field naming one of the edit tools plus that tool's arguments.",

@@ -99,6 +99,7 @@ import { notFound } from "next/navigation"
 
 import {
   ANIMATION_SCRIPT,
+  customScript,
   documentCss,
   EXACT_RUNTIME_SCRIPT,
   fontHref,
@@ -154,6 +155,7 @@ export default async function Page({ params }: Props) {
   if (!page) notFound()
   const doc = loadDoc(page)
   const fonts = fontHref(doc.theme)
+  const script = customScript(doc)
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: rootScript(doc) }} />
@@ -162,6 +164,7 @@ export default async function Page({ params }: Props) {
       <PageRenderer doc={doc} />
       <script dangerouslySetInnerHTML={{ __html: ANIMATION_SCRIPT }} />
       {isExact(doc) && <script dangerouslySetInnerHTML={{ __html: EXACT_RUNTIME_SCRIPT }} />}
+      {script && <script dangerouslySetInnerHTML={{ __html: script }} />}
     </>
   )
 }

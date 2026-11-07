@@ -131,6 +131,11 @@ export const OP_DEFINITIONS = {
       "Edit the page stylesheet of an exact clone (styles.css). With `find`, replace that exact snippet (it must match once); without it, append `replace` as new rules. Use for colors, fonts, spacing, hover effects and animations of html sections.",
     input: z.object({ find: z.string().optional(), replace: z.string() }),
   },
+  edit_page_js: {
+    description:
+      "Edit the page's custom JavaScript (sliders, tabs, menus, counters, form behavior, tracking). Markup <script> tags and inline on* handlers are stripped, so all behavior goes here: plain browser JS that runs once at the end of <body>, after the page markup exists; select elements with querySelector and attach listeners with addEventListener. With `find`, replace that exact snippet (it must match once; an empty `replace` removes it); without it, append `replace`. The script runs only on the published site, not in the editor preview, so tell the user to publish to see it.",
+    input: z.object({ find: z.string().optional(), replace: z.string() }),
+  },
 } as const
 
 export type OpName = keyof typeof OP_DEFINITIONS
@@ -282,6 +287,15 @@ function applyOne(doc: PageDoc, op: Op): string {
 ${op.replace}`
       doc.styles = { ...doc.styles, css: next }
       return op.find ? "Edited the page CSS" : "Added rules to the page CSS"
+    }
+    case "edit_page_js": {
+      const js = doc.script ?? ""
+      const next = op.find ? replaceSnippet(js, op.find, op.replace, false, "the page JavaScript") : js ? `${js}\n${op.replace}` : op.replace
+      if (next.trim()) doc.script = next
+      else delete doc.script
+      return op.find
+        ? "Edited the page JavaScript (it runs on the published site after publishing)"
+        : "Added to the page JavaScript (it runs on the published site after publishing)"
     }
   }
 }

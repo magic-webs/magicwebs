@@ -29,6 +29,18 @@ export function rootAttributes(doc: PageDoc, element: "html" | "body"): Record<s
   )
 }
 
+/**
+ * The page's custom JavaScript, ready to place inside a <script> element, or
+ * null when it has none. Only published pages and exports run it; the editor
+ * preview shares the app's origin and never does.
+ */
+export function customScript(doc: PageDoc): string | null {
+  const js = doc.script?.trim()
+  if (!js) return null
+  // Nothing in the code may end the element or open an HTML comment.
+  return js.replace(/<\/(script)/gi, "<\\/$1").replace(/<!--/g, "<\\!--")
+}
+
 export function SectionView({ section }: { section: Section }): ReactNode {
   const Component = SECTION_COMPONENTS[section.type] as ((props: { section: Section }) => ReactNode) | undefined
   // A page saved by newer code than this renderer: skip what it can't draw

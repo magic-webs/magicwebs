@@ -275,6 +275,12 @@ export const PageDocSchema = z.object({
   theme: ThemeSchema,
   styles: PageStylesSchema.optional(),
   sections: z.array(SectionSchema),
+  script: z
+    .string()
+    .optional()
+    .describe(
+      "Custom JavaScript run at the end of <body> on the published page and in exports. Never run in the editor preview",
+    ),
 })
 
 export type Link = z.infer<typeof LinkSchema>

@@ -3,7 +3,7 @@ import { renderToReadableStream } from "react-dom/server"
 import type { PageDoc } from "@magicwebs/page-schema"
 
 import { ANIMATION_SCRIPT, fontHref } from "./css"
-import { documentCss, isExact, PageRenderer, rootAttributes, safeSrc } from "./index"
+import { customScript, documentCss, isExact, PageRenderer, rootAttributes, safeSrc } from "./index"
 import { EXACT_RUNTIME_SCRIPT } from "./runtime"
 
 export type RenderOptions = {
@@ -16,6 +16,7 @@ function Document({ doc, url }: { doc: PageDoc } & RenderOptions) {
   const ogImage = safeSrc(doc.meta.ogImage)
   const favicon = safeSrc(doc.meta.favicon)
   const exact = isExact(doc)
+  const script = customScript(doc)
   return (
     <html lang={doc.meta.lang ?? "en"} className={doc.styles?.htmlClass || undefined} {...rootAttributes(doc, "html")}>
       <head>
@@ -40,6 +41,7 @@ function Document({ doc, url }: { doc: PageDoc } & RenderOptions) {
         <PageRenderer doc={doc} />
         <script dangerouslySetInnerHTML={{ __html: ANIMATION_SCRIPT }} />
         {exact && <script dangerouslySetInnerHTML={{ __html: EXACT_RUNTIME_SCRIPT }} />}
+        {script && <script dangerouslySetInnerHTML={{ __html: script }} />}
       </body>
     </html>
   )

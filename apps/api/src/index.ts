@@ -4,6 +4,7 @@ import { logger } from "hono/logger"
 
 import { bearer, clientForApiKey, clientForToken, isSignedIn } from "./auth"
 import { handleUpload } from "./assets"
+import { handleBlogAssist } from "./blog-assist"
 import { handleChat } from "./chat"
 import { env } from "./env"
 import { handleMcp } from "./mcp"
@@ -24,6 +25,18 @@ app.post("/chat", async (c) => {
   const convex = token ? clientForToken(token) : null
   if (!convex || !(await isSignedIn(convex))) return c.json({ error: "Sign in to use the AI chat" }, 401)
   return handleChat(c.req.raw, convex)
+})
+
+// AI help in the dashboard's blog editor: ideas, drafts, rewrites and search fields.
+app.use(
+  "/blog/assist",
+  cors({ origin: env.webOrigins, allowMethods: ["POST"], allowHeaders: ["Content-Type", "Authorization"] }),
+)
+app.post("/blog/assist", async (c) => {
+  const token = bearer(c.req.raw)
+  const convex = token ? clientForToken(token) : null
+  if (!convex || !(await isSignedIn(convex))) return c.json({ error: "Sign in to use AI writing" }, 401)
+  return handleBlogAssist(c.req.raw, convex)
 })
 
 // Files attached in the AI chat, sent by the platform UI with its session token.

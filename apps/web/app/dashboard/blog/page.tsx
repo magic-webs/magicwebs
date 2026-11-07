@@ -7,6 +7,7 @@ import { useState } from "react"
 import { api } from "@magicwebs/backend/convex/_generated/api"
 import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
 
+import { BlogAi } from "@/components/dashboard/blog-ai"
 import { errorText } from "@/components/dashboard/lib"
 import { PageHeader } from "@/components/dashboard/shell"
 import { Badge } from "@/components/ui/badge"
@@ -30,7 +31,7 @@ export default function BlogPage() {
     <>
       <PageHeader
         title="Blog"
-        description="Posts appear at /blog on your published site, in its own header, footer and theme. Ask the AI chat in the editor to write one, or write it here in Markdown."
+        description="Posts appear at /blog on your published site, in its own header, footer and theme. Write them here in Markdown, with AI suggestions and drafts as you go."
         action={
           projects && projects.length > 1 ? (
             <NativeSelect
@@ -252,6 +253,8 @@ function EditorForm({
   const unpublish = useMutation(api.posts.unpublish)
   const remove = useMutation(api.posts.remove)
   const [draft, setDraft] = useState(initial)
+  /** The draft before the last AI change, for Undo. */
+  const [beforeAi, setBeforeAi] = useState<Draft | null>(null)
   const [schedule, setSchedule] = useState("")
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -298,29 +301,44 @@ function EditorForm({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      <Card>
-        <CardContent className="flex flex-col gap-4 pt-6">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="post-title">Title</Label>
-            <Input id="post-title" value={draft.title} onChange={set("title")} placeholder="What's this post about?" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="post-excerpt">Excerpt</Label>
-            <Textarea id="post-excerpt" rows={2} value={draft.excerpt} onChange={set("excerpt")} placeholder="One or two sentences for the post list and search results." />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="post-body">Body (Markdown)</Label>
-            <Textarea
-              id="post-body"
-              rows={22}
-              className="font-mono text-sm"
-              value={draft.body}
-              onChange={set("body")}
-              placeholder={"## A heading\n\nA paragraph with **bold** and a [link](https://example.com).\n\n- A list item"}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex min-w-0 flex-col gap-6">
+        <BlogAi
+          projectId={projectId}
+          fields={draft}
+          canUndo={beforeAi !== null}
+          onApply={(patch) => {
+            setBeforeAi(draft)
+            setDraft((d) => ({ ...d, ...patch }))
+          }}
+          onUndo={() => {
+            if (beforeAi) setDraft(beforeAi)
+            setBeforeAi(null)
+          }}
+        />
+        <Card>
+          <CardContent className="flex flex-col gap-4 pt-6">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="post-title">Title</Label>
+              <Input id="post-title" value={draft.title} onChange={set("title")} placeholder="What's this post about?" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="post-excerpt">Excerpt</Label>
+              <Textarea id="post-excerpt" rows={2} value={draft.excerpt} onChange={set("excerpt")} placeholder="One or two sentences for the post list and search results." />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="post-body">Body (Markdown)</Label>
+              <Textarea
+                id="post-body"
+                rows={22}
+                className="font-mono text-sm"
+                value={draft.body}
+                onChange={set("body")}
+                placeholder={"## A heading\n\nA paragraph with **bold** and a [link](https://example.com).\n\n- A list item"}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="flex flex-col gap-4">
         <Card size="sm">

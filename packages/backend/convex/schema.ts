@@ -106,6 +106,10 @@ export default defineSchema({
         color: v.optional(v.string()),
         /** One-line bubble beside the launcher. */
         teaser: v.optional(v.string()),
+        /** Launcher icon (widget.ts WIDGET_ICONS); "chat-dots" when unset. */
+        icon: v.optional(v.string()),
+        /** Launcher animation (widget.ts WIDGET_ANIMATIONS); none when unset. */
+        animation: v.optional(v.string()),
         /** Pages that don't show it. */
         hiddenPaths: v.optional(v.array(v.string())),
       }),

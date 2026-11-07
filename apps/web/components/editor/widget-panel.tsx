@@ -13,6 +13,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
+import {
+  IconGlyph,
+  LauncherPreview,
+  WIDGET_ANIMATIONS,
+  WIDGET_ICONS,
+  type WidgetAnimation,
+  type WidgetIcon,
+} from "@/components/editor/widget-icons"
 import { MAGIC_AGENT_URL } from "@/lib/magic-agent"
 import { cn } from "@/lib/utils"
 
@@ -59,6 +67,8 @@ export function WidgetPanel({ projectId, path, primary }: { projectId: Id<"proje
   }
 
   const hiddenHere = widget.hiddenPaths.includes(path)
+  const icon = (widget.icon in WIDGET_ICONS ? widget.icon : "chat-dots") as WidgetIcon
+  const animation = (WIDGET_ANIMATIONS.some((a) => a.value === widget.animation) ? widget.animation : "none") as WidgetAnimation
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-4">
@@ -98,6 +108,55 @@ export function WidgetPanel({ projectId, path, primary }: { projectId: Id<"proje
               )}
             >
               Bottom {position}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+          <LauncherPreview icon={icon} animation={animation} color={widget.color ?? primary} />
+          <p className="text-xs text-muted-foreground">
+            How the button looks on your site. Animations pause while the chat is open.
+          </p>
+        </div>
+        <Label>Icon</Label>
+        <div className="grid grid-cols-4 gap-1.5">
+          {(Object.keys(WIDGET_ICONS) as WidgetIcon[]).map((value) => (
+            <button
+              key={value}
+              type="button"
+              title={WIDGET_ICONS[value][0]}
+              aria-label={`${WIDGET_ICONS[value][0]} icon`}
+              aria-pressed={icon === value}
+              onClick={() => change({ icon: value })}
+              className={cn(
+                "flex flex-col items-center gap-1 rounded-md border px-1 py-2 text-[11px] transition-colors",
+                icon === value ? "border-primary bg-primary/5 font-medium" : "text-muted-foreground hover:bg-muted",
+              )}
+            >
+              <IconGlyph icon={value} size={20} />
+              {WIDGET_ICONS[value][0]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label>Animation</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {WIDGET_ANIMATIONS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={animation === value}
+              onClick={() => change({ animation: value })}
+              className={cn(
+                "rounded-md border px-2.5 py-1.5 text-xs transition-colors",
+                animation === value ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted",
+              )}
+            >
+              {label}
             </button>
           ))}
         </div>

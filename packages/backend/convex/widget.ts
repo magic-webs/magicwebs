@@ -13,6 +13,12 @@ import { requireProject } from "./lib"
 
 const TEASER_MAX = 120
 
+/** Launcher icons Magic Agent's embed.js draws (its data-icon). */
+export const WIDGET_ICONS = ["chat-dots", "chat", "sparkles", "bot", "headset", "smile", "help", "whatsapp"] as const
+/** Launcher animations (its data-animation). */
+export const WIDGET_ANIMATIONS = ["none", "pulse", "bounce", "wiggle", "breathe"] as const
+const DEFAULT_ICON = "chat-dots"
+
 /** What the edge needs to add the widget to a site's pages, or null when it shows nowhere. */
 export function edgeWidget(project: Doc<"projects">) {
   const widget = project.widget
@@ -23,6 +29,9 @@ export function edgeWidget(project: Doc<"projects">) {
     position: widget.position,
     color: widget.color,
     teaser: widget.teaser,
+    // Sent always: embed.js on its own draws WhatsApp's logo.
+    icon: widget.icon ?? DEFAULT_ICON,
+    animation: widget.animation,
     hiddenPaths: widget.hiddenPaths ?? [],
   }
 }
@@ -43,13 +52,15 @@ export const get = query({
       position: widget.position ?? "right",
       color: widget.color ?? null,
       teaser: widget.teaser ?? null,
+      icon: widget.icon ?? DEFAULT_ICON,
+      animation: widget.animation ?? "none",
       hiddenPaths: widget.hiddenPaths ?? [],
       workspaceSlug: project.magicAgent?.workspaceSlug ?? null,
     }
   },
 })
 
-/** Change the widget: on or off for the site, where it sits, its color and teaser, and which pages hide it. */
+/** Change the widget: on or off for the site, where it sits, its color, icon, animation and teaser, and which pages hide it. */
 export const update = mutation({
   args: {
     projectId: v.id("projects"),
@@ -59,10 +70,12 @@ export const update = mutation({
     color: v.optional(v.string()),
     /** An empty string removes it. */
     teaser: v.optional(v.string()),
+    icon: v.optional(v.union(...WIDGET_ICONS.map((i) => v.literal(i)))),
+    animation: v.optional(v.union(...WIDGET_ANIMATIONS.map((a) => v.literal(a)))),
     /** Show or hide it on one page. */
     page: v.optional(v.object({ path: v.string(), visible: v.boolean() })),
   },
-  handler: async (ctx, { projectId, enabled, position, color, teaser, page }) => {
+  handler: async (ctx, { projectId, enabled, position, color, teaser, icon, animation, page }) => {
     const project = await requireProject(ctx, projectId)
     const widget = project.widget
     if (!widget) throw new ConvexError("The chat widget is still being set up with this site's Magic Agent workspace.")
@@ -77,6 +90,8 @@ export const update = mutation({
       }
       next.color = value || undefined
     }
+    if (icon !== undefined) next.icon = icon
+    if (animation !== undefined) next.animation = animation === "none" ? undefined : animation
     if (teaser !== undefined) next.teaser = teaser.trim().slice(0, TEASER_MAX) || undefined
     if (page) {
       const hidden = new Set(widget.hiddenPaths ?? [])

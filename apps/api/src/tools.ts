@@ -121,7 +121,7 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
   },
   get_chat_widget: {
     description:
-      "Get the site's Magic Agent chat widget: whether it's on, its position, color, teaser and the pages that hide it. Every page shows it by default once the site's Magic Agent workspace is ready.",
+      "Get the site's Magic Agent chat widget: whether it's on, its position, color, launcher icon and animation, teaser and the pages that hide it. Every page shows it by default once the site's Magic Agent workspace is ready.",
     input: z.object({}),
     run: async (convex, { projectId }) => convex.query(api.widget.get, { projectId }),
   },
@@ -133,6 +133,14 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
       position: z.enum(["left", "right"]).optional(),
       color: z.string().optional().describe("Launcher color as hex, rgb() or hsl(); empty string to follow the page's primary color"),
       teaser: z.string().optional().describe("One-line bubble beside the launcher, e.g. 'Questions? Chat with us'; empty string removes it"),
+      icon: z
+        .enum(["chat-dots", "chat", "sparkles", "bot", "headset", "smile", "help", "whatsapp"])
+        .optional()
+        .describe("Launcher icon. whatsapp only suits a business that mainly talks to customers on WhatsApp"),
+      animation: z
+        .enum(["none", "pulse", "bounce", "wiggle", "breathe"])
+        .optional()
+        .describe("Launcher animation to catch the eye; it pauses while the chat is open"),
       showOnThisPage: z.boolean().optional(),
     }),
     run: async (convex, { projectId, path }, input) => {
@@ -141,6 +149,8 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
         position?: "left" | "right"
         color?: string
         teaser?: string
+        icon?: "chat-dots" | "chat" | "sparkles" | "bot" | "headset" | "smile" | "help" | "whatsapp"
+        animation?: "none" | "pulse" | "bounce" | "wiggle" | "breathe"
         showOnThisPage?: boolean
       }
       await convex.mutation(api.widget.update, {

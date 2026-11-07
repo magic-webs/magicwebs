@@ -23,6 +23,9 @@ type Widget = {
   /** Unset: the page's primary color. */
   color?: string
   teaser?: string
+  /** Launcher icon and animation; missing on sites synced before they existed. */
+  icon?: string
+  animation?: string
   hiddenPaths: string[]
 }
 
@@ -152,6 +155,8 @@ function widgetScript(widget: Widget | null | undefined, path: string, doc: Page
     "data-position": widget.position,
     "data-color": widget.color ?? doc?.theme.colors.primary,
     "data-teaser": widget.teaser,
+    "data-icon": widget.icon ?? "chat-dots",
+    "data-animation": widget.animation,
   }
   const extra = Object.entries(attrs)
     .filter(([, value]) => value)

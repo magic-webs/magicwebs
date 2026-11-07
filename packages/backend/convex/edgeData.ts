@@ -5,6 +5,7 @@ import { HOME_PATH, type SitePage } from "@magicwebs/page-schema"
 import type { Doc } from "./_generated/dataModel"
 import { internalQuery, type QueryCtx } from "./_generated/server"
 import { loadDoc, loadSnapshot } from "./lib"
+import { edgeWidget } from "./widget"
 
 type PublishedPage = SitePage & { title: string }
 
@@ -37,6 +38,7 @@ export const publishedSite = internalQuery({
       version: version.number,
       publishedAt: project.publishedAt ?? version.createdAt,
       pages: versionPages(project, version),
+      widget: edgeWidget(project),
       hostnames: domains.filter((d) => d.status === "active").map((d) => d.hostname),
     }
   },
@@ -71,6 +73,7 @@ export const liveVersionByHost = internalQuery({
       version: version.number,
       publishedAt: project.publishedAt ?? version.createdAt,
       pages: versionPages(project, version),
+      widget: edgeWidget(project),
     }
   },
 })

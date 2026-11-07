@@ -23,6 +23,7 @@ import { PreviewFrame, type Device } from "./preview-frame"
 import { ProjectStatus } from "./project-status"
 import { SectionsPanel } from "./sections-panel"
 import { ThemePanel } from "./theme-panel"
+import { WidgetPanel } from "./widget-panel"
 import { useApplyOps } from "./use-apply-ops"
 import { VersionsDialog } from "./versions-dialog"
 
@@ -165,6 +166,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
               <TabsTrigger value="ai">AI</TabsTrigger>
               <TabsTrigger value="sections">Sections</TabsTrigger>
               <TabsTrigger value="theme">Theme</TabsTrigger>
+              <TabsTrigger value="widget">Widget</TabsTrigger>
             </TabsList>
             <TabsContent value="ai" className="min-h-0 flex-1">
               <ChatPanel
@@ -179,6 +181,9 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
             </TabsContent>
             <TabsContent value="theme" className="min-h-0 flex-1">
               <ThemePanel doc={doc} apply={apply} />
+            </TabsContent>
+            <TabsContent value="widget" className="min-h-0 flex-1">
+              <WidgetPanel projectId={projectId} path={path} primary={doc.theme.colors.primary} />
             </TabsContent>
           </Tabs>
         </aside>

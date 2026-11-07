@@ -119,6 +119,38 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
     input: z.object({ note: z.string().optional().describe("Short description of what changed") }),
     run: async (convex, { projectId }, { note }) => convex.mutation(api.versions.publish, { projectId, note: note as string | undefined }),
   },
+  get_chat_widget: {
+    description:
+      "Get the site's Magic Agent chat widget: whether it's on, its position, color, teaser and the pages that hide it. Every page shows it by default once the site's Magic Agent workspace is ready.",
+    input: z.object({}),
+    run: async (convex, { projectId }) => convex.query(api.widget.get, { projectId }),
+  },
+  set_chat_widget: {
+    description:
+      "Change the site's Magic Agent chat widget. Changes go live at once, without publishing. `enabled` turns it on or off for the whole site; `showOnThisPage` shows or hides it on the current page only.",
+    input: z.object({
+      enabled: z.boolean().optional(),
+      position: z.enum(["left", "right"]).optional(),
+      color: z.string().optional().describe("Launcher color as hex, rgb() or hsl(); empty string to follow the page's primary color"),
+      teaser: z.string().optional().describe("One-line bubble beside the launcher, e.g. 'Questions? Chat with us'; empty string removes it"),
+      showOnThisPage: z.boolean().optional(),
+    }),
+    run: async (convex, { projectId, path }, input) => {
+      const { showOnThisPage, ...rest } = input as {
+        enabled?: boolean
+        position?: "left" | "right"
+        color?: string
+        teaser?: string
+        showOnThisPage?: boolean
+      }
+      await convex.mutation(api.widget.update, {
+        projectId,
+        ...rest,
+        page: showOnThisPage === undefined ? undefined : { path, visible: showOnThisPage },
+      })
+      return convex.query(api.widget.get, { projectId })
+    },
+  },
   list_versions: {
     description: "List published versions, newest first.",
     input: z.object({}),

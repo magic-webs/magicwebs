@@ -168,7 +168,7 @@ export const linkAccount = internalMutation({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect()
     for (const project of projects) {
-      if (!project.magicAgent || project.magicAgent.status === "failed") await queueWorkspace(ctx, project._id)
+      if (project.magicAgent?.status !== "ready" || !project.widget) await queueWorkspace(ctx, project._id)
     }
     return userId
   },
@@ -203,13 +203,18 @@ export const status = query({
   },
 })
 
-/** Queue the project's workspace to be made, unless it has one or one is on its way. */
+/**
+ * Queue the project's workspace and its chat widget to be made, unless they
+ * exist or are on their way. A workspace made before widgets keeps its slug
+ * and only gets the widget.
+ */
 export async function queueWorkspace(ctx: MutationCtx, projectId: Id<"projects">) {
   if (!deploymentUrl()) return
   const project = await ctx.db.get(projectId)
-  if (!project?.userId || project.magicAgent?.workspaceSlug) return
-  if (project.magicAgent?.status === "pending" || project.magicAgent?.status === "creating") return
-  await ctx.db.patch(projectId, { magicAgent: { status: "pending" } })
+  const state = project?.magicAgent
+  if (!project?.userId || (state?.status === "ready" && project.widget)) return
+  if (state?.status === "pending" || state?.status === "creating") return
+  await ctx.db.patch(projectId, { magicAgent: { status: "pending", workspaceSlug: state?.workspaceSlug } })
   await ctx.scheduler.runAfter(0, internal.magicAgent.createWorkspace, { projectId })
 }
 
@@ -218,8 +223,9 @@ export const retryWorkspace = mutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
     const project = await requireProject(ctx, projectId)
-    if (project.magicAgent?.status !== "failed") return
-    await queueWorkspace(ctx, projectId)
+    if (project.magicAgent?.status === "failed" || (project.magicAgent?.status === "ready" && !project.widget)) {
+      await queueWorkspace(ctx, projectId)
+    }
   },
 })
 
@@ -232,14 +238,16 @@ export const claimWorkspace = internalMutation({
       .query("magicAgentAccounts")
       .withIndex("by_user", (q) => q.eq("userId", project.userId!))
       .unique()
+    const workspaceSlug = project.magicAgent.workspaceSlug
     if (!account) {
       await ctx.db.patch(projectId, {
-        magicAgent: { status: "failed", error: "Connect your Magic account to give this website its workspace." },
+        magicAgent: { status: "failed", workspaceSlug, error: "Connect your Magic account to give this website its workspace." },
       })
       return null
     }
-    await ctx.db.patch(projectId, { magicAgent: { status: "creating" } })
+    await ctx.db.patch(projectId, { magicAgent: { status: "creating", workspaceSlug } })
     return {
+      workspaceSlug,
       name: project.name,
       website: `https://${project.slug}.${sitesRootDomain()}`,
       sessionToken: account.sessionToken,
@@ -252,16 +260,26 @@ export const finishWorkspace = internalMutation({
   args: {
     projectId: v.id("projects"),
     workspaceSlug: v.optional(v.string()),
+    /** The workspace's web channel, whose widget goes on every page. */
+    channelKey: v.optional(v.string()),
     error: v.optional(v.string()),
     /** The account's session has ended: ask the person to sign in again. */
     accountId: v.optional(v.id("magicAgentAccounts")),
   },
-  handler: async (ctx, { projectId, workspaceSlug, error, accountId }) => {
+  handler: async (ctx, { projectId, workspaceSlug, channelKey, error, accountId }) => {
     if (accountId && (await ctx.db.get(accountId))) await ctx.db.patch(accountId, { expiresAt: 0 })
-    if (!(await ctx.db.get(projectId))) return
+    const project = await ctx.db.get(projectId)
+    if (!project) return
+    if (!channelKey) {
+      await ctx.db.patch(projectId, { magicAgent: { status: "failed", workspaceSlug, error } })
+      return
+    }
     await ctx.db.patch(projectId, {
-      magicAgent: workspaceSlug ? { status: "ready", workspaceSlug } : { status: "failed", error },
+      magicAgent: { status: "ready", workspaceSlug },
+      // On by default; a new channel keeps the settings the site already had.
+      widget: project.widget ? { ...project.widget, channelKey } : { channelKey, enabled: true },
     })
+    if (project.publishedVersionId) await ctx.scheduler.runAfter(0, internal.edge.syncSite, { projectId })
   },
 })
 
@@ -270,27 +288,35 @@ export const createWorkspace = internalAction({
   handler: async (ctx, { projectId }) => {
     const claim = await ctx.runMutation(internal.magicAgent.claimWorkspace, { projectId })
     if (!claim) return
+    let workspaceSlug = claim.workspaceSlug
     try {
       const token = await accessToken(claim.sessionToken)
       if (!token) {
         await ctx.runMutation(internal.magicAgent.finishWorkspace, {
           projectId,
+          workspaceSlug,
           error: "Your Magic account sign-in has ended. Sign in again to finish setting up.",
           accountId: claim.accountId,
         })
         return
       }
-      const { slug } = await call<{ slug: string }>(
-        "mutation",
-        "workspaces:createForUser",
-        { name: claim.name, website: claim.website },
-        token,
-      )
-      await ctx.runMutation(internal.magicAgent.finishWorkspace, { projectId, workspaceSlug: slug })
+      workspaceSlug =
+        claim.workspaceSlug ??
+        (
+          await call<{ slug: string }>(
+            "mutation",
+            "workspaces:createForUser",
+            { name: claim.name, website: claim.website },
+            token,
+          )
+        ).slug
+      const { channelKey } = await call<{ channelKey: string }>("mutation", "channels:websiteWidget", { workspaceSlug }, token)
+      await ctx.runMutation(internal.magicAgent.finishWorkspace, { projectId, workspaceSlug, channelKey })
     } catch (error) {
       console.error("magicAgent.createWorkspace failed:", error)
       await ctx.runMutation(internal.magicAgent.finishWorkspace, {
         projectId,
+        workspaceSlug,
         error: error instanceof ConvexError && typeof error.data === "string" ? error.data : "Couldn't reach Magic Agent. Try again.",
       })
     }

@@ -15,11 +15,22 @@ type Env = {
 
 type PublishedPage = SitePage & { title?: string }
 
+/** The site's Magic Agent chat widget (see packages/backend/convex/widget.ts). */
+type Widget = {
+  src: string
+  position?: "left" | "right"
+  /** Unset: the page's primary color. */
+  color?: string
+  teaser?: string
+  hiddenPaths: string[]
+}
+
 type PublishedSite = {
   version: number
   publishedAt: number
   /** Missing on sites published before multi-page sites: then the site is one home page. */
   pages?: PublishedPage[]
+  widget?: Widget | null
   /** The home page. */
   doc: PageDoc
 }
@@ -55,7 +66,13 @@ function notFound(message: string) {
   )
 }
 
-type LiveVersion = { projectId: string; version: number; publishedAt: number; pages?: PublishedPage[] }
+type LiveVersion = {
+  projectId: string
+  version: number
+  publishedAt: number
+  pages?: PublishedPage[]
+  widget?: Widget | null
+}
 
 async function cachedJson<T>(url: string, ctx: ExecutionContext): Promise<T | null> {
   const cache = caches.default
@@ -125,6 +142,28 @@ function escapeXml(value: string) {
   return value.replace(/[<>&'"]/g, (c) => `&#${c.charCodeAt(0)};`)
 }
 
+/** The widget's embed script for one page, or "" where it doesn't show. */
+function widgetScript(widget: Widget | null | undefined, path: string, doc: PageDoc | null): string {
+  if (!widget || widget.hiddenPaths.includes(path)) return ""
+  const attrs: Record<string, string | undefined> = {
+    "data-position": widget.position,
+    "data-color": widget.color ?? doc?.theme.colors.primary,
+    "data-teaser": widget.teaser,
+  }
+  const extra = Object.entries(attrs)
+    .filter(([, value]) => value)
+    .map(([name, value]) => ` ${name}="${escapeXml(value!)}"`)
+    .join("")
+  return `<script src="${escapeXml(widget.src)}"${extra} async></script>`
+}
+
+/** A short, stable fingerprint, so a change of widget settings misses the render cache. */
+function fingerprint(value: string): string {
+  let hash = 2166136261
+  for (let i = 0; i < value.length; i++) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619)
+  return (hash >>> 0).toString(36)
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method !== "GET" && request.method !== "HEAD") {
@@ -172,8 +211,10 @@ export default {
     // The version is part of the cache key, so a new version is rendered fresh
     // without purging anything.
     const cache = caches.default
+    const widget = site.widget && !site.widget.hiddenPaths.includes(path) ? site.widget : null
+    const widgetKey = widget ? fingerprint(JSON.stringify(widget)) : "none"
     const cacheKey = new Request(
-      `https://render.cache/r${RENDER_REVISION}/${projectId}/v${site.version}/${hostname}${encodeURI(path)}`,
+      `https://render.cache/r${RENDER_REVISION}/${projectId}/v${site.version}/w${widgetKey}/${hostname}${encodeURI(path)}`,
     )
     const cached = await cache.match(cacheKey)
     if (cached) return cached
@@ -184,11 +225,11 @@ export default {
     const doc = pages.length > 1 ? rewriteSiteLinks(stored, pages.filter((p) => p.source)) : stored
     const stream = await renderPage(doc, { url: `https://${hostname}${encodeURI(path)}` })
     const rendered = await new Response(stream).text()
-    const script = liveReloadScript(site.version)
+    const script = liveReloadScript(site.version) + widgetScript(widget, path, stored)
     const bodyEnd = rendered.lastIndexOf("</body>")
     const html = bodyEnd < 0 ? rendered + script : rendered.slice(0, bodyEnd) + script + rendered.slice(bodyEnd)
     const response = new Response(html, {
-      headers: { ...HTML_HEADERS, ETag: `"${projectId}-v${site.version}-${encodeURIComponent(path)}"` },
+      headers: { ...HTML_HEADERS, ETag: `"${projectId}-v${site.version}-w${widgetKey}-${encodeURIComponent(path)}"` },
     })
     ctx.waitUntil(cache.put(cacheKey, response.clone()))
     return response

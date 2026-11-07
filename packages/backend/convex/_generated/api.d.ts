@@ -28,6 +28,7 @@ import type * as projects from "../projects.js";
 import type * as rebuilds from "../rebuilds.js";
 import type * as users from "../users.js";
 import type * as versions from "../versions.js";
+import type * as widget from "../widget.js";
 
 import type {
   ApiFromModules,
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   rebuilds: typeof rebuilds;
   users: typeof users;
   versions: typeof versions;
+  widget: typeof widget;
 }>;
 
 /**

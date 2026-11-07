@@ -6,7 +6,7 @@ import { kvDelete, kvPut } from "./cloudflare"
 
 // The edge worker falls back to Workers KV when Convex can't be reached:
 //   host:<hostname>          -> projectId
-//   site:<projectId>         -> { version, publishedAt, pages, doc }   doc is the home page
+//   site:<projectId>         -> { version, publishedAt, pages, widget, doc }   doc is the home page
 //   page:<projectId>:<path>  -> { version, doc }                       every other page
 // Each page has its own key, as a site's pages together can outgrow a KV value.
 // Publishing writes here; no build or deploy is involved.
@@ -24,7 +24,7 @@ export const syncSite = internalAction({
     const doc = await ctx.runQuery(internal.edgeData.publishedPage, { projectId, path: "/" })
     await kvPut(
       `site:${projectId}`,
-      JSON.stringify({ version: site.version, publishedAt: site.publishedAt, pages: site.pages, doc }),
+      JSON.stringify({ version: site.version, publishedAt: site.publishedAt, pages: site.pages, widget: site.widget, doc }),
     )
     for (const hostname of site.hostnames) {
       await kvPut(`host:${hostname}`, projectId)

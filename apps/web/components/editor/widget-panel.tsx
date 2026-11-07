@@ -1,0 +1,153 @@
+"use client"
+
+import { useMutation, useQuery } from "convex/react"
+import type { FunctionArgs } from "convex/server"
+import { useState } from "react"
+
+import { api } from "@magicwebs/backend/convex/_generated/api"
+import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
+
+import { errorText } from "@/components/dashboard/lib"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Spinner } from "@/components/ui/spinner"
+import { Switch } from "@/components/ui/switch"
+import { MAGIC_AGENT_URL } from "@/lib/magic-agent"
+import { cn } from "@/lib/utils"
+
+type Change = Omit<FunctionArgs<typeof api.widget.update>, "projectId">
+
+/** The site's Magic Agent chat widget: on every published page unless switched off here. */
+export function WidgetPanel({ projectId, path, primary }: { projectId: Id<"projects">; path: string; primary: string }) {
+  const widget = useQuery(api.widget.get, { projectId })
+  const update = useMutation(api.widget.update)
+  const [error, setError] = useState<string | null>(null)
+
+  async function change(args: Change) {
+    setError(null)
+    try {
+      await update({ projectId, ...args })
+    } catch (err) {
+      setError(errorText(err))
+    }
+  }
+
+  if (widget === undefined) {
+    return (
+      <div className="grid place-items-center p-6">
+        <Spinner className="text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!widget.ready) {
+    const failed = widget.workspace?.status === "failed"
+    return (
+      <div className="flex flex-col gap-2 p-4 text-sm text-muted-foreground">
+        <h3 className="font-medium text-foreground">Chat widget</h3>
+        {failed ? (
+          <p className="text-destructive">{widget.workspace?.error ?? "This site's Magic Agent workspace couldn't be set up."} Retry from the dashboard.</p>
+        ) : (
+          <p className="flex items-center gap-2">
+            <Spinner className="size-3" />
+            Setting up this site&apos;s Magic Agent workspace…
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  const hiddenHere = widget.hiddenPaths.includes(path)
+
+  return (
+    <div className="flex h-full flex-col gap-6 overflow-y-auto p-4">
+      <div className="flex flex-col gap-1">
+        <h3 className="text-sm font-medium">Chat widget</h3>
+        <p className="text-xs text-muted-foreground">
+          Your Magic Agent answers visitors on every page. Changes go live at once, without publishing.
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <Label htmlFor="widget-enabled">Show on this site</Label>
+        <Switch id="widget-enabled" checked={widget.enabled} onCheckedChange={(enabled) => change({ enabled })} />
+      </div>
+      <div className={cn("flex items-center justify-between gap-3", !widget.enabled && "opacity-50")}>
+        <Label htmlFor="widget-page">Show on this page</Label>
+        <Switch
+          id="widget-page"
+          disabled={!widget.enabled}
+          checked={!hiddenHere}
+          onCheckedChange={(visible) => change({ page: { path, visible } })}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label>Position</Label>
+        <div className="grid grid-cols-2 gap-1.5">
+          {(["left", "right"] as const).map((position) => (
+            <button
+              key={position}
+              type="button"
+              aria-pressed={widget.position === position}
+              onClick={() => change({ position })}
+              className={cn(
+                "rounded-md border px-2 py-1.5 text-xs capitalize transition-colors",
+                widget.position === position ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted",
+              )}
+            >
+              Bottom {position}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="widget-color">Color</Label>
+        <div className="flex items-center gap-2">
+          <input
+            id="widget-color"
+            type="color"
+            value={/^#[0-9a-f]{6}$/i.test(widget.color ?? primary) ? (widget.color ?? primary) : "#000000"}
+            onChange={(e) => change({ color: e.target.value })}
+            className="h-8 w-10 cursor-pointer rounded border bg-transparent"
+          />
+          <span className="text-xs text-muted-foreground">{widget.color ? widget.color : "Page's primary color"}</span>
+          {widget.color && (
+            <button type="button" className="ml-auto text-xs underline-offset-4 hover:underline" onClick={() => change({ color: "" })}>
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="widget-teaser">Teaser</Label>
+        <Input
+          id="widget-teaser"
+          key={widget.teaser ?? ""}
+          defaultValue={widget.teaser ?? ""}
+          placeholder="Questions? Chat with us"
+          maxLength={120}
+          onBlur={(e) => {
+            if (e.target.value.trim() !== (widget.teaser ?? "")) void change({ teaser: e.target.value })
+          }}
+        />
+        <p className="text-xs text-muted-foreground">A one-line bubble beside the button. Leave empty for none.</p>
+      </div>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {MAGIC_AGENT_URL && widget.workspaceSlug && (
+        <a
+          href={`${MAGIC_AGENT_URL}/w/${widget.workspaceSlug}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-auto text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          Set up the agent&apos;s answers in Magic Agent →
+        </a>
+      )}
+    </div>
+  )
+}

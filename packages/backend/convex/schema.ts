@@ -73,6 +73,24 @@ export default defineSchema({
         error: v.optional(v.string()),
       }),
     ),
+    /**
+     * The workspace's chat widget, which the edge adds to every published page
+     * unless it's switched off or hidden on that page. Changes go live without
+     * publishing (see widget.ts).
+     */
+    widget: v.optional(
+      v.object({
+        channelKey: v.string(),
+        enabled: v.boolean(),
+        position: v.optional(v.union(v.literal("left"), v.literal("right"))),
+        /** Launcher color; the page's primary color when unset. */
+        color: v.optional(v.string()),
+        /** One-line bubble beside the launcher. */
+        teaser: v.optional(v.string()),
+        /** Pages that don't show it. */
+        hiddenPaths: v.optional(v.array(v.string())),
+      }),
+    ),
     createdAt: v.number(),
   })
     .index("by_slug", ["slug"])

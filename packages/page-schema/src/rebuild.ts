@@ -20,6 +20,7 @@ Reproduce the original as faithfully as the registry allows:
 - Set style.align to "center" for sections whose text is centered in the screenshots.
 - Short figure rows inside a text block (e.g. "60% Query Resolved", "24x7 Support") go in the content section's stats, not in bullets.
 - Image grids with a label under each image: use gallery with each image's caption.
+- Contact, enquiry, quote or sign-up forms: use form, with the original's fields in order (name, email, phone, company and message keep those names).
 - Logos: set monochrome only when the original logos are gray.
 - Navbar and footer: leave brand empty when the logo image already shows the name.
 - Use the mobile screenshot to choose layouts that collapse the same way, including mobileColumns (1 or 2) for features and galleries.

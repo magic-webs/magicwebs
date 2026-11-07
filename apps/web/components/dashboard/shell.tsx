@@ -11,6 +11,7 @@ import {
   FolderIcon,
   GlobeIcon,
   HomeIcon,
+  ListIcon,
   PieChartIcon,
   ServerIcon,
   SettingsIcon,
@@ -41,6 +42,7 @@ import { ProfileMenu } from "./profile-menu"
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: HomeIcon },
   { href: "/dashboard/projects", label: "Projects", icon: FolderIcon, badge: "projects" as const },
+  { href: "/dashboard/leads", label: "Leads", icon: ListIcon },
   { href: "/dashboard/domains", label: "Domains", icon: GlobeIcon },
   { href: "/dashboard/activity", label: "Activity", icon: ClockIcon },
   { href: "/dashboard/usage", label: "Usage", icon: PieChartIcon },

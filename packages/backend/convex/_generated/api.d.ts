@@ -19,6 +19,7 @@ import type * as edge from "../edge.js";
 import type * as edgeData from "../edgeData.js";
 import type * as http from "../http.js";
 import type * as jobs from "../jobs.js";
+import type * as leads from "../leads.js";
 import type * as lib from "../lib.js";
 import type * as magicAgent from "../magicAgent.js";
 import type * as migrations from "../migrations.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   edgeData: typeof edgeData;
   http: typeof http;
   jobs: typeof jobs;
+  leads: typeof leads;
   lib: typeof lib;
   magicAgent: typeof magicAgent;
   migrations: typeof migrations;

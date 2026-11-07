@@ -70,9 +70,13 @@ export default defineSchema({
       v.object({
         status: v.union(v.literal("pending"), v.literal("creating"), v.literal("ready"), v.literal("failed")),
         workspaceSlug: v.optional(v.string()),
+        /** The workspace's "Website enquiry" book's incoming URL, where every lead is sent. */
+        leadsUrl: v.optional(v.string()),
         error: v.optional(v.string()),
       }),
     ),
+    /** Forms that don't collect leads, by key (see leads.ts). Every other form does. */
+    stoppedForms: v.optional(v.array(v.string())),
     /**
      * The workspace's chat widget, which the edge adds to every published page
      * unless it's switched off or hidden on that page. Changes go live without
@@ -214,6 +218,35 @@ export default defineSchema({
   })
     .index("by_project", ["projectId"])
     .index("by_message", ["projectId", "messageId"]),
+
+  /**
+   * What visitors sent through the published site's forms. Each is also sent
+   * to the site's Magic Agent workspace, as a record in its "Website enquiry"
+   * book; `delivery` says how that went.
+   */
+  leads: defineTable({
+    projectId: v.id("projects"),
+    /** Page the form was on. */
+    path: v.string(),
+    /** The form: a form section's id, or "<section id>:<n>" for the n-th form inside a copied section. */
+    form: v.string(),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    company: v.optional(v.string()),
+    message: v.optional(v.string()),
+    /** Every answer, as the form named it. */
+    fields: v.array(v.object({ key: v.string(), value: v.string() })),
+    /** Hash of the sender's IP address and the day, only for rate limiting. */
+    sender: v.optional(v.string()),
+    delivery: v.union(v.literal("pending"), v.literal("sent"), v.literal("failed")),
+    deliveryError: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_project", ["projectId", "createdAt"])
+    .index("by_project_form", ["projectId", "form", "createdAt"])
+    .index("by_sender", ["projectId", "sender", "createdAt"])
+    .index("by_delivery", ["projectId", "delivery"]),
 
   /** Long strings of stored pages (exact clones' markup and CSS), see lib.ts. */
   blobs: defineTable({

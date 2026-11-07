@@ -31,6 +31,7 @@ type PublishedSite = {
   /** Missing on sites published before multi-page sites: then the site is one home page. */
   pages?: PublishedPage[]
   widget?: Widget | null
+  stoppedForms?: string[]
   /** The home page. */
   doc: PageDoc
 }
@@ -72,6 +73,7 @@ type LiveVersion = {
   publishedAt: number
   pages?: PublishedPage[]
   widget?: Widget | null
+  stoppedForms?: string[]
 }
 
 async function cachedJson<T>(url: string, ctx: ExecutionContext): Promise<T | null> {
@@ -157,6 +159,28 @@ function widgetScript(widget: Widget | null | undefined, path: string, doc: Page
   return `<script src="${escapeXml(widget.src)}"${extra} async></script>`
 }
 
+/**
+ * Sends the page's forms to /__forms, so what visitors submit becomes a lead:
+ * form sections (data-mw-form) and forms copied from the original site, keyed
+ * "<section id>:<n>". Search forms and stopped forms are left alone. Answers
+ * are taken by name, else id, placeholder or label, so forms built for a
+ * script still say what each answer was.
+ */
+function formsScript(stopped: string[]): string {
+  return `<script>(()=>{const off=new Set(${JSON.stringify(stopped).replace(/</g, "\\u003c")});
+function key(f){if(f.dataset.mwForm)return f.dataset.mwForm;const s=f.closest("[data-section-id]");return (s?s.getAttribute("data-section-id"):"page")+":"+[...(s||document).querySelectorAll("form")].indexOf(f)}
+function search(f){if(f.getAttribute("role")==="search"||/search/i.test(f.getAttribute("action")||"")||f.querySelector("input[type=search]"))return true;const i=[...f.elements].filter(e=>e.name&&!["hidden","submit","button"].includes(e.type));return i.length===1&&/^(q|s|query|search)$/i.test(i[0].name)}
+function label(e,f,n){if(e.name)return e.name;if(e.id){const l=f.querySelector('label[for="'+CSS.escape(e.id)+'"]');if(l&&l.textContent.trim())return l.textContent.trim()}return e.getAttribute("aria-label")||e.placeholder||e.id||e.type+"_"+n}
+document.addEventListener("submit",async ev=>{const f=ev.target;if(!(f instanceof HTMLFormElement)||f.hasAttribute("data-mw-skip")||search(f))return;const k=key(f);if(off.has(k))return;
+ev.preventDefault();ev.stopImmediatePropagation();if(!f.reportValidity())return;
+const fields=[];[...f.elements].forEach((e,n)=>{if(!e.type||["submit","button","reset","file","password","image"].includes(e.type)||(e.type==="hidden"&&e.name!=="_hp"))return;if((e.type==="checkbox"||e.type==="radio")&&!e.checked)return;const vals=e.type==="select-multiple"?[...e.selectedOptions].map(o=>o.value):[e.value];for(const v of vals)if(v)fields.push({key:label(e,f,n),value:v})});
+const b=f.querySelector("[type=submit],button:not([type])");if(b)b.disabled=true;let ok=false,msg="";
+try{const r=await fetch("/__forms",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({form:k,path:location.pathname,fields})});ok=r.ok;if(!ok)msg=((await r.json().catch(()=>({}))).error)||""}catch{}
+if(b)b.disabled=false;
+if(ok){const d=document.createElement("p");d.className="mw-form-done";d.setAttribute("role","status");d.textContent=f.dataset.mwSuccess||"Thanks! We'll be in touch soon.";f.replaceWith(d)}
+else{let e=f.querySelector(".mw-form-error");if(!e){e=document.createElement("p");e.className="mw-form-error";e.setAttribute("role","alert");f.appendChild(e)}e.textContent=msg||"Sorry, that didn't send. Please try again."}},true)})()</script>`
+}
+
 /** A short, stable fingerprint, so a change of widget settings misses the render cache. */
 function fingerprint(value: string): string {
   let hash = 2166136261
@@ -164,13 +188,48 @@ function fingerprint(value: string): string {
   return (hash >>> 0).toString(36)
 }
 
+const FORM_BODY_MAX = 64_000
+
+/** A form on a published page was sent: hand it to Convex, which files the lead. */
+async function submitForm(request: Request, env: Env, hostname: string): Promise<Response> {
+  const headers = { "Cache-Control": "no-store" }
+  // Same-origin only: the page's own script posts here.
+  const origin = request.headers.get("Origin")
+  if (origin && new URL(origin).hostname.toLowerCase() !== hostname) return Response.json({ ok: false }, { status: 403, headers })
+  if (!env.CONVEX_SITE_URL) return Response.json({ ok: false }, { status: 503, headers })
+  const text = await request.text()
+  if (text.length > FORM_BODY_MAX) return Response.json({ ok: false }, { status: 413, headers })
+  let body: { form?: unknown; path?: unknown; fields?: unknown }
+  try {
+    body = JSON.parse(text)
+  } catch {
+    return Response.json({ ok: false }, { status: 400, headers })
+  }
+  const response = await fetch(`${env.CONVEX_SITE_URL}/forms/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      hostname,
+      form: body.form,
+      path: body.path,
+      fields: body.fields,
+      ip: request.headers.get("CF-Connecting-IP") ?? undefined,
+    }),
+  })
+  return new Response(await response.text(), {
+    status: response.status,
+    headers: { ...headers, "Content-Type": "application/json" },
+  })
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url)
+    const hostname = url.hostname.toLowerCase()
+    if (request.method === "POST" && url.pathname === "/__forms") return submitForm(request, env, hostname)
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } })
     }
-    const url = new URL(request.url)
-    const hostname = url.hostname.toLowerCase()
 
     if (url.pathname === "/robots.txt") {
       return new Response(`User-agent: *\nAllow: /\nSitemap: https://${hostname}/sitemap.xml\n`, {
@@ -212,7 +271,8 @@ export default {
     // without purging anything.
     const cache = caches.default
     const widget = site.widget && !site.widget.hiddenPaths.includes(path) ? site.widget : null
-    const widgetKey = widget ? fingerprint(JSON.stringify(widget)) : "none"
+    const stopped = site.stoppedForms ?? []
+    const widgetKey = fingerprint(JSON.stringify([widget, stopped]))
     const cacheKey = new Request(
       `https://render.cache/r${RENDER_REVISION}/${projectId}/v${site.version}/w${widgetKey}/${hostname}${encodeURI(path)}`,
     )
@@ -225,7 +285,7 @@ export default {
     const doc = pages.length > 1 ? rewriteSiteLinks(stored, pages.filter((p) => p.source)) : stored
     const stream = await renderPage(doc, { url: `https://${hostname}${encodeURI(path)}` })
     const rendered = await new Response(stream).text()
-    const script = liveReloadScript(site.version) + widgetScript(widget, path, stored)
+    const script = liveReloadScript(site.version) + formsScript(stopped) + widgetScript(widget, path, stored)
     const bodyEnd = rendered.lastIndexOf("</body>")
     const html = bodyEnd < 0 ? rendered + script : rendered.slice(0, bodyEnd) + script + rendered.slice(bodyEnd)
     const response = new Response(html, {

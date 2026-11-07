@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values"
 
 import { internal } from "./_generated/api"
-import type { Id } from "./_generated/dataModel"
+import type { Doc, Id } from "./_generated/dataModel"
 import {
   action,
   internalAction,
@@ -168,7 +168,7 @@ export const linkAccount = internalMutation({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect()
     for (const project of projects) {
-      if (project.magicAgent?.status !== "ready" || !project.widget) await queueWorkspace(ctx, project._id)
+      if (!isSetUp(project)) await queueWorkspace(ctx, project._id)
     }
     return userId
   },
@@ -203,16 +203,21 @@ export const status = query({
   },
 })
 
+/** The site has its workspace, its chat widget and the book its leads go to. */
+function isSetUp(project: Doc<"projects">): boolean {
+  return project.magicAgent?.status === "ready" && Boolean(project.widget && project.magicAgent.leadsUrl)
+}
+
 /**
- * Queue the project's workspace and its chat widget to be made, unless they
- * exist or are on their way. A workspace made before widgets keeps its slug
- * and only gets the widget.
+ * Queue the project's workspace, chat widget and lead book to be made, unless
+ * they exist or are on their way. A workspace made before the widget or the
+ * book keeps its slug and only gets what it lacks.
  */
 export async function queueWorkspace(ctx: MutationCtx, projectId: Id<"projects">) {
   if (!deploymentUrl()) return
   const project = await ctx.db.get(projectId)
   const state = project?.magicAgent
-  if (!project?.userId || (state?.status === "ready" && project.widget)) return
+  if (!project?.userId || isSetUp(project)) return
   if (state?.status === "pending" || state?.status === "creating") return
   await ctx.db.patch(projectId, { magicAgent: { status: "pending", workspaceSlug: state?.workspaceSlug } })
   await ctx.scheduler.runAfter(0, internal.magicAgent.createWorkspace, { projectId })
@@ -223,7 +228,7 @@ export const retryWorkspace = mutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
     const project = await requireProject(ctx, projectId)
-    if (project.magicAgent?.status === "failed" || (project.magicAgent?.status === "ready" && !project.widget)) {
+    if (project.magicAgent?.status === "failed" || (project.magicAgent?.status === "ready" && !isSetUp(project))) {
       await queueWorkspace(ctx, projectId)
     }
   },
@@ -262,24 +267,28 @@ export const finishWorkspace = internalMutation({
     workspaceSlug: v.optional(v.string()),
     /** The workspace's web channel, whose widget goes on every page. */
     channelKey: v.optional(v.string()),
+    /** Where the site's leads are sent. */
+    leadsUrl: v.optional(v.string()),
     error: v.optional(v.string()),
     /** The account's session has ended: ask the person to sign in again. */
     accountId: v.optional(v.id("magicAgentAccounts")),
   },
-  handler: async (ctx, { projectId, workspaceSlug, channelKey, error, accountId }) => {
+  handler: async (ctx, { projectId, workspaceSlug, channelKey, leadsUrl, error, accountId }) => {
     if (accountId && (await ctx.db.get(accountId))) await ctx.db.patch(accountId, { expiresAt: 0 })
     const project = await ctx.db.get(projectId)
     if (!project) return
-    if (!channelKey) {
+    if (!channelKey || !leadsUrl) {
       await ctx.db.patch(projectId, { magicAgent: { status: "failed", workspaceSlug, error } })
       return
     }
     await ctx.db.patch(projectId, {
-      magicAgent: { status: "ready", workspaceSlug },
+      magicAgent: { status: "ready", workspaceSlug, leadsUrl },
       // On by default; a new channel keeps the settings the site already had.
       widget: project.widget ? { ...project.widget, channelKey } : { channelKey, enabled: true },
     })
     if (project.publishedVersionId) await ctx.scheduler.runAfter(0, internal.edge.syncSite, { projectId })
+    // Leads sent before the book existed.
+    await ctx.scheduler.runAfter(0, internal.leads.deliverPending, { projectId })
   },
 })
 
@@ -311,7 +320,8 @@ export const createWorkspace = internalAction({
           )
         ).slug
       const { channelKey } = await call<{ channelKey: string }>("mutation", "channels:websiteWidget", { workspaceSlug }, token)
-      await ctx.runMutation(internal.magicAgent.finishWorkspace, { projectId, workspaceSlug, channelKey })
+      const { url: leadsUrl } = await call<{ url: string }>("mutation", "recordIntake:websiteEnquiries", { workspaceSlug }, token)
+      await ctx.runMutation(internal.magicAgent.finishWorkspace, { projectId, workspaceSlug, channelKey, leadsUrl })
     } catch (error) {
       console.error("magicAgent.createWorkspace failed:", error)
       await ctx.runMutation(internal.magicAgent.finishWorkspace, {

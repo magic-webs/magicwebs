@@ -200,6 +200,25 @@ export const SectionPropsSchemas = {
     subheading: z.string().optional(),
     ...CtaFields,
   }),
+  form: z.object({
+    eyebrow: z.string().optional(),
+    heading: z.string().optional(),
+    subheading: z.string().optional(),
+    fields: z.array(
+      z.object({
+        name: z
+          .string()
+          .describe("Key the answer is saved under: name, email, phone, company and message are recognised as the lead's details"),
+        label: z.string(),
+        type: z.enum(["text", "email", "tel", "textarea", "select", "number", "date", "checkbox"]),
+        required: z.boolean().optional(),
+        placeholder: z.string().optional(),
+        options: z.array(z.string()).optional().describe("Choices, for a select"),
+      }),
+    ),
+    submitLabel: z.string(),
+    successMessage: z.string().describe("Shown in place of the form once it is sent"),
+  }),
   footer: z.object({
     brand: z.string().optional(),
     logo: ImageSchema.optional(),
@@ -244,6 +263,7 @@ export const SectionSchema = z.discriminatedUnion("type", [
   sectionVariant("pricing"),
   sectionVariant("faq"),
   sectionVariant("gallery"),
+  sectionVariant("form"),
   sectionVariant("cta"),
   sectionVariant("footer"),
   sectionVariant("custom"),

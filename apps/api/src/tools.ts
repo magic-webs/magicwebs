@@ -151,6 +151,30 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
       return convex.query(api.widget.get, { projectId })
     },
   },
+  get_forms: {
+    description:
+      "List every form on the site's pages (form sections, and forms copied inside html sections) with its key, page, fields, whether it collects leads and how many it has. Each submission becomes a lead in the dashboard and in the site's Magic Agent workspace.",
+    input: z.object({}),
+    run: async (convex, { projectId }) => convex.query(api.leads.forms, { projectId }),
+  },
+  set_form_collecting: {
+    description: "Stop a form collecting leads, or start it again, by its key from get_forms. Takes effect on the live site at once.",
+    input: z.object({ form: z.string(), collecting: z.boolean() }),
+    run: async (convex, { projectId }, { form, collecting }) => {
+      await convex.mutation(api.leads.setCollecting, { projectId, form: form as string, collecting: collecting as boolean })
+      return { ok: true }
+    },
+  },
+  list_leads: {
+    description: "List the site's most recent leads (form submissions), newest first. Optionally only one form's, by its key.",
+    input: z.object({ form: z.string().optional(), limit: z.number().optional().describe("Default 50, at most 200") }),
+    run: async (convex, { projectId }, { form, limit }) =>
+      convex.query(api.leads.list, {
+        projectId,
+        form: form as string | undefined,
+        limit: Math.min((limit as number | undefined) ?? 50, 200),
+      }),
+  },
   list_versions: {
     description: "List published versions, newest first.",
     input: z.object({}),

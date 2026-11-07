@@ -114,6 +114,18 @@ export function pageCss(theme: Theme): string {
 .mw-faq summary::-webkit-details-marker{display:none}
 .mw-faq details p{margin-top:12px;color:var(--mw-muted-fg)}
 .mw-gallery img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--mw-radius)}
+.mw-form{max-width:640px;margin:40px auto 0;display:flex;flex-direction:column;gap:16px;text-align:left}
+.mw-field{display:flex;flex-direction:column;gap:6px}
+.mw-field label{font-size:.9rem;font-weight:500}
+.mw-form input:not([type=checkbox]),.mw-form textarea,.mw-form select{width:100%;padding:11px 14px;font:inherit;color:inherit;background:var(--mw-bg);border:1px solid var(--mw-border);border-radius:var(--mw-radius)}
+.mw-form textarea{resize:vertical}
+.mw-form input:focus,.mw-form textarea:focus,.mw-form select:focus{outline:2px solid var(--mw-primary);outline-offset:1px}
+.mw-check{display:flex;align-items:flex-start;gap:10px;font-size:.95rem}
+.mw-check input{margin-top:4px;accent-color:var(--mw-primary)}
+.mw-form .mw-btn{align-self:flex-start;cursor:pointer;font:inherit;font-weight:600}
+.mw-form .mw-hp{position:absolute;left:-10000px;width:1px;height:1px;opacity:0}
+.mw-form-done{padding:8px 0;font-size:1.05rem;font-weight:500}
+.mw-form-error{color:#dc2626;font-size:.9rem}
 .mw-footer{padding:64px 24px 40px;border-top:1px solid var(--mw-border)}
 .mw-footer-grid{display:grid;grid-template-columns:1.5fr repeat(var(--mw-cols,3),1fr);gap:40px;max-width:var(--mw-max);margin:0 auto}
 .mw-footer ul{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}

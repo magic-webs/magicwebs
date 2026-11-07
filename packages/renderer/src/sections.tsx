@@ -465,6 +465,60 @@ function Gallery({ section }: { section: SectionOf<"gallery"> }) {
   )
 }
 
+/**
+ * A form whose answers become leads. The published page's runtime sends it to
+ * the site's own /__forms endpoint (see apps/edge), and the hidden `_hp` field
+ * is a trap that only bots fill in.
+ */
+function Form({ section }: { section: SectionOf<"form"> }) {
+  const p = section.props
+  return (
+    <Shell section={section}>
+      <Heading eyebrow={p.eyebrow} heading={p.heading} subheading={p.subheading} center />
+      <form className="mw-card mw-form" data-mw-form={section.id} data-mw-success={p.successMessage} method="post">
+        {p.fields.map((field, i) => {
+          const id = `${section.id}-${i}`
+          const common = { id, name: field.name, required: field.required, placeholder: field.placeholder }
+          if (field.type === "checkbox") {
+            return (
+              <label key={i} className="mw-check" htmlFor={id}>
+                <input {...common} type="checkbox" value="yes" placeholder={undefined} />
+                <span>{field.label}</span>
+              </label>
+            )
+          }
+          return (
+            <div key={i} className="mw-field">
+              <label htmlFor={id}>
+                {field.label}
+                {field.required && <span aria-hidden="true"> *</span>}
+              </label>
+              {field.type === "textarea" ? (
+                <textarea {...common} rows={4} />
+              ) : field.type === "select" ? (
+                <select {...common} defaultValue="">
+                  <option value="" disabled>
+                    {field.placeholder ?? "Choose…"}
+                  </option>
+                  {(field.options ?? []).map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+              ) : (
+                <input {...common} type={field.type} />
+              )}
+            </div>
+          )
+        })}
+        <input type="text" name="_hp" tabIndex={-1} autoComplete="off" aria-hidden="true" className="mw-hp" />
+        <button type="submit" className="mw-btn mw-btn-primary">
+          {p.submitLabel}
+        </button>
+      </form>
+    </Shell>
+  )
+}
+
 function Cta({ section }: { section: SectionOf<"cta"> }) {
   const p = section.props
   return (
@@ -608,6 +662,7 @@ export const SECTION_COMPONENTS: Registry = {
   pricing: Pricing,
   faq: Faq,
   gallery: Gallery,
+  form: Form,
   cta: Cta,
   footer: Footer,
   custom: Custom,

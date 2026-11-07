@@ -39,6 +39,7 @@ export const publishedSite = internalQuery({
       publishedAt: project.publishedAt ?? version.createdAt,
       pages: versionPages(project, version),
       widget: edgeWidget(project),
+      stoppedForms: project.stoppedForms ?? [],
       hostnames: domains.filter((d) => d.status === "active").map((d) => d.hostname),
     }
   },
@@ -74,6 +75,7 @@ export const liveVersionByHost = internalQuery({
       publishedAt: project.publishedAt ?? version.createdAt,
       pages: versionPages(project, version),
       widget: edgeWidget(project),
+      stoppedForms: project.stoppedForms ?? [],
     }
   },
 })

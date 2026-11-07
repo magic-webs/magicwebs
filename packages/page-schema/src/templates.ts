@@ -98,6 +98,21 @@ export const SECTION_TEMPLATES: { [T in SectionType]: Extract<NewSection, { type
     type: "gallery",
     props: { heading: "Gallery", columns: 3, images: [] },
   },
+  form: {
+    type: "form",
+    props: {
+      heading: "Get in touch",
+      subheading: "Tell us what you need and we'll get back to you.",
+      fields: [
+        { name: "name", label: "Name", type: "text", required: true },
+        { name: "email", label: "Email", type: "email", required: true },
+        { name: "phone", label: "Phone", type: "tel" },
+        { name: "message", label: "Message", type: "textarea" },
+      ],
+      submitLabel: "Send",
+      successMessage: "Thanks! We'll be in touch soon.",
+    },
+  },
   cta: {
     type: "cta",
     props: { heading: "Ready to get started?", subheading: "One line to remove doubt.", primaryCta: { label: "Get started", href: "#" } },

@@ -8,6 +8,7 @@ import { deleteChat } from "./chats"
 import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server"
 import { ensurePages, findUserByEmail, listPages, ownedProject, requireProject, requireUser, setPageState, sitesRootDomain, syncProjectStatus, slugify, viewerProjects } from "./lib"
 import { insertPages } from "./pages"
+import { queueWorkspace } from "./magicAgent"
 import { aiEffort, aiMode, aiModel, templateId } from "./models"
 
 // Subdomains of SITES_ROOT_DOMAIN the platform itself uses (DNS-only records
@@ -116,6 +117,7 @@ async function createProject(ctx: MutationCtx, userId: Id<"users">, args: Object
     status: "active",
     createdAt: now,
   })
+  await queueWorkspace(ctx, projectId)
   return projectId
 }
 

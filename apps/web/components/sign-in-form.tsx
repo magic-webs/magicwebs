@@ -9,12 +9,9 @@ import { useEffect, useState } from "react"
 import { BrandMark } from "@/components/brand-mark"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { MagicAccountForm, type AccountFlow } from "@/components/magic-account-form"
 import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
-
-type Flow = "signIn" | "signUp"
 
 function GoogleIcon() {
   return (
@@ -31,8 +28,8 @@ export function SignInForm({ next }: { next: string }) {
   const { signIn } = useAuthActions()
   const { isAuthenticated } = useConvexAuth()
   const router = useRouter()
-  const [flow, setFlow] = useState<Flow>("signIn")
-  const [pending, setPending] = useState<"password" | "google" | null>(null)
+  const [flow, setFlow] = useState<AccountFlow>("signIn")
+  const [google, setGoogle] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Covers coming back from Google as well as a password sign-in.
@@ -40,32 +37,33 @@ export function SignInForm({ next }: { next: string }) {
     if (isAuthenticated) router.replace(next)
   }, [isAuthenticated, next, router])
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    form.set("flow", flow)
-    setError(null)
-    setPending("password")
+  async function onSession(sessionToken: string) {
     try {
-      await signIn("password", form)
+      await signIn("magic-agent", { sessionToken })
     } catch {
-      setError(
-        flow === "signIn"
-          ? "That email and password don't match an account."
-          : "Couldn't create the account. It may already exist, or the password is shorter than 8 characters.",
-      )
-      setPending(null)
+      throw new Error("Couldn't sign you in. Try again.")
+    }
+  }
+
+  // A password from before accounts moved to Magic Agent. It still signs in,
+  // and the dashboard then asks the person to connect a Magic account.
+  async function onWrongPassword(email: string, password: string) {
+    try {
+      await signIn("password", { email, password, flow: "signIn" })
+      return true
+    } catch {
+      return false
     }
   }
 
   async function onGoogle() {
     setError(null)
-    setPending("google")
+    setGoogle(true)
     try {
       await signIn("google", { redirectTo: next })
     } catch {
       setError("Couldn't start Google sign-in. Try again.")
-      setPending(null)
+      setGoogle(false)
     }
   }
 
@@ -80,58 +78,32 @@ export function SignInForm({ next }: { next: string }) {
           <CardHeader>
             <CardTitle>{flow === "signIn" ? "Sign in" : "Create your account"}</CardTitle>
             <CardDescription>
-              {flow === "signIn" ? "Welcome back. Your pages are waiting." : "Clone, edit and publish pages with AI."}
+              {flow === "signIn"
+                ? "One Magic account for Magicwebs and Magic Agent."
+                : "One account for building your websites and the AI agents that answer their visitors."}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
-            <Button variant="outline" onClick={onGoogle} disabled={pending !== null}>
-              {pending === "google" ? <Spinner /> : <GoogleIcon />}
+            <Button variant="outline" onClick={onGoogle} disabled={google}>
+              {google ? <Spinner /> : <GoogleIcon />}
               Continue with Google
             </Button>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <Separator className="flex-1" />
               or
               <Separator className="flex-1" />
             </div>
-            <form onSubmit={onSubmit} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" autoComplete="email" required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete={flow === "signIn" ? "current-password" : "new-password"}
-                  minLength={8}
-                  required
-                />
-              </div>
-              {error && (
-                <p role="alert" className="text-sm text-destructive">
-                  {error}
-                </p>
-              )}
-              <Button type="submit" disabled={pending !== null}>
-                {pending === "password" && <Spinner />}
-                {flow === "signIn" ? "Sign in" : "Create account"}
-              </Button>
-            </form>
-            <p className="text-center text-sm text-muted-foreground">
-              {flow === "signIn" ? "New to Magicwebs?" : "Already have an account?"}{" "}
-              <button
-                type="button"
-                className="font-medium text-foreground underline-offset-4 hover:underline"
-                onClick={() => {
-                  setFlow(flow === "signIn" ? "signUp" : "signIn")
-                  setError(null)
-                }}
-              >
-                {flow === "signIn" ? "Create an account" : "Sign in"}
-              </button>
-            </p>
+            <MagicAccountForm
+              flow={flow}
+              onFlowChange={setFlow}
+              onSession={onSession}
+              onWrongPassword={onWrongPassword}
+            />
           </CardContent>
         </Card>
       </div>

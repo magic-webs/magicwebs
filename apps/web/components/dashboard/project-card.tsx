@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { MAGIC_AGENT_URL } from "@/lib/magic-agent"
 import { cn } from "@/lib/utils"
 
 import { errorText, formatCost, modelLabel, type Project } from "./lib"
@@ -272,6 +273,8 @@ export function ProjectCard({ project }: { project: Project }) {
         </p>
       )}
 
+      <AgentWorkspace project={project} />
+
       <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span className={cn("flex min-w-0 items-center gap-1.5", project.publishedVersionId && "text-foreground")}>
           <GlobeIcon className="size-3.5 shrink-0" />
@@ -285,5 +288,62 @@ export function ProjectCard({ project }: { project: Project }) {
         </span>
       </div>
     </div>
+  )
+}
+
+/** The website's own workspace on Magic Agent, where its agent and leads live. */
+function AgentWorkspace({ project }: { project: Project }) {
+  const retry = useMutation(api.magicAgent.retryWorkspace)
+  const [busy, setBusy] = useState(false)
+  const state = project.magicAgent
+  if (!state) return null
+
+  if (state.status === "pending" || state.status === "creating") {
+    return (
+      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Spinner className="size-3" />
+        Setting up its Magic Agent workspace…
+      </p>
+    )
+  }
+  if (state.status === "failed") {
+    return (
+      <p className="relative z-10 flex items-start gap-1.5 text-xs text-destructive">
+        <AlertTriangleIcon solid className="mt-px size-3.5 shrink-0" />
+        <span className="line-clamp-2 flex-1">{state.error ?? "Couldn't set up its Magic Agent workspace."}</span>
+        <button
+          type="button"
+          disabled={busy}
+          className="shrink-0 font-medium text-foreground underline-offset-4 hover:underline"
+          onClick={async () => {
+            setBusy(true)
+            try {
+              await retry({ projectId: project._id })
+            } finally {
+              setBusy(false)
+            }
+          }}
+        >
+          Retry
+        </button>
+      </p>
+    )
+  }
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <SparkleIcon className="size-3.5 shrink-0" />
+      {MAGIC_AGENT_URL ? (
+        <a
+          href={`${MAGIC_AGENT_URL}/w/${state.workspaceSlug}`}
+          target="_blank"
+          rel="noreferrer"
+          className="relative z-10 underline-offset-4 hover:text-foreground hover:underline"
+        >
+          Open in Magic Agent
+        </a>
+      ) : (
+        "Magic Agent workspace ready"
+      )}
+    </p>
   )
 }

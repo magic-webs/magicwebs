@@ -24,6 +24,25 @@ export default defineSchema({
     .index("by_hash", ["hash"])
     .index("by_user", ["userId"]),
 
+  /**
+   * The Magic Agent account a user signs in with. Accounts live on Magic Agent;
+   * this is the link to one, and the session Magicwebs acts with on its behalf
+   * (creating a workspace per website). The session token is a credential:
+   * it never leaves the backend.
+   */
+  magicAgentAccounts: defineTable({
+    userId: v.id("users"),
+    /** The Magic Agent `users` id. */
+    maUserId: v.string(),
+    email: v.string(),
+    sessionToken: v.string(),
+    /** When the session is expected to end; a failed call ends it sooner. */
+    expiresAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_ma_user", ["maUserId"]),
+
   projects: defineTable({
     /** Owner. Optional only for projects made before accounts existed; see migrations.claimProjects. */
     userId: v.optional(v.id("users")),
@@ -46,6 +65,14 @@ export default defineSchema({
     publishedAt: v.optional(v.number()),
     /** Pending auto-publish after the latest edit. */
     autoPublishId: v.optional(v.id("_scheduled_functions")),
+    /** The site's own workspace on Magic Agent, made with it (see magicAgent.ts). */
+    magicAgent: v.optional(
+      v.object({
+        status: v.union(v.literal("pending"), v.literal("creating"), v.literal("ready"), v.literal("failed")),
+        workspaceSlug: v.optional(v.string()),
+        error: v.optional(v.string()),
+      }),
+    ),
     createdAt: v.number(),
   })
     .index("by_slug", ["slug"])

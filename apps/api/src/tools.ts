@@ -182,6 +182,84 @@ export const PAGE_TOOLS: Record<string, PageTool> = {
     run: async (convex, { projectId }, { days }) =>
       convex.query(api.analytics.summary, { projectId, days: (days as number | undefined) ?? 30 }),
   },
+  list_posts: {
+    description:
+      "List the site's blog posts (drafts included) with their id, slug, title, status, publish date and whether they're scheduled. The blog is served at /blog on the published site, in the site's own header, footer and theme.",
+    input: z.object({}),
+    run: async (convex, { projectId }) => convex.query(api.posts.list, { projectId }),
+  },
+  get_post: {
+    description: "Get one blog post, including its Markdown body.",
+    input: z.object({ postId: z.string() }),
+    run: async (convex, _target, { postId }) => convex.query(api.posts.get, { postId: postId as Id<"posts"> }),
+  },
+  create_post: {
+    description:
+      "Write a new blog post as a draft. The body is Markdown (## headings, lists, links, **bold**, images as ![alt](https://…)); don't repeat the title in it. It stays a draft until publish_post. Match the site's voice and audience.",
+    input: z.object({
+      title: z.string(),
+      body: z.string().describe("Markdown"),
+      excerpt: z.string().optional().describe("One or two sentences for the post list and search results"),
+      cover: z.string().optional().describe("https URL of the cover image; don't invent one"),
+      coverAlt: z.string().optional(),
+      author: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      slug: z.string().optional().describe("URL part; made from the title when left out"),
+      seoTitle: z.string().optional(),
+      seoDescription: z.string().optional(),
+    }),
+    run: async (convex, { projectId }, input) => {
+      const postId = await convex.mutation(api.posts.create, { projectId, ...(input as { title: string; body: string }) })
+      return { ok: true, postId, note: "Saved as a draft. Publish it with publish_post when the user asks." }
+    },
+  },
+  update_post: {
+    description: "Change a blog post. Only the fields given change; a published post shows the change at once. An empty string clears an optional field.",
+    input: z.object({
+      postId: z.string(),
+      title: z.string().optional(),
+      body: z.string().optional().describe("Markdown, replacing the whole body"),
+      excerpt: z.string().optional(),
+      cover: z.string().optional(),
+      coverAlt: z.string().optional(),
+      author: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      slug: z.string().optional(),
+      seoTitle: z.string().optional(),
+      seoDescription: z.string().optional(),
+    }),
+    run: async (convex, _target, { postId, ...rest }) => {
+      await convex.mutation(api.posts.update, { postId: postId as Id<"posts">, ...(rest as Record<string, never>) })
+      return { ok: true }
+    },
+  },
+  publish_post: {
+    description:
+      "Put a blog post live on the site, now or at a future time to schedule it. Publishing a post doesn't publish the site's pages. Only do this when the user asks.",
+    input: z.object({ postId: z.string(), at: z.string().optional().describe("ISO date-time to schedule it for") }),
+    run: async (convex, _target, { postId, at }) => {
+      const time = at ? Date.parse(at as string) : undefined
+      if (time !== undefined && Number.isNaN(time)) throw new Error("`at` must be an ISO date-time")
+      await convex.mutation(api.posts.publish, { postId: postId as Id<"posts">, at: time })
+      return { ok: true }
+    },
+  },
+  unpublish_post: {
+    description: "Take a blog post off the site; it stays as a draft.",
+    input: z.object({ postId: z.string() }),
+    run: async (convex, _target, { postId }) => {
+      await convex.mutation(api.posts.unpublish, { postId: postId as Id<"posts"> })
+      return { ok: true }
+    },
+  },
+  delete_post: {
+    description: "Delete a blog post for good. Only when the user asks.",
+    input: z.object({ postId: z.string() }),
+    run: async (convex, _target, { postId }) => {
+      await convex.mutation(api.posts.remove, { postId: postId as Id<"posts"> })
+      return { ok: true }
+    },
+  },
   list_versions: {
     description: "List published versions, newest first.",
     input: z.object({}),

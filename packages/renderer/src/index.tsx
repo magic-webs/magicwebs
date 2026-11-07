@@ -5,7 +5,8 @@ import { sanitizeCss, type PageDoc, type Section } from "@magicwebs/page-schema"
 import { EXACT_CSS, pageCss } from "./css"
 import { cleanHtml, SECTION_COMPONENTS } from "./sections"
 
-export { ANIMATION_SCRIPT, EXACT_CSS, fontHref, pageCss } from "./css"
+export { ANIMATION_SCRIPT, BLOG_CSS, EXACT_CSS, fontHref, pageCss } from "./css"
+export { blogIndexHtml, blogPostHtml, blogShell, type BlogCard, type BlogPost } from "./blog"
 export { exactRuntime, EXACT_RUNTIME_SCRIPT, syncMediaClasses } from "./runtime"
 export { SECTION_COMPONENTS, safeHref, safeSrc } from "./sections"
 export { templateCss } from "./templates"
@@ -53,7 +54,22 @@ export function SectionView({ section }: { section: Section }): ReactNode {
  * injects `pageCss` into its preview frame and the edge worker writes it into
  * the document head.
  */
-export function PageRenderer({ doc }: { doc: PageDoc }) {
+/**
+ * Content that isn't a section of the page, such as a blog post, placed after
+ * the first `after` visible sections (the site's header). Sanitized here.
+ */
+export type MainContent = { html: string; after: number }
+
+export function PageRenderer({ doc, main }: { doc: PageDoc; main?: MainContent }) {
+  const sections = doc.sections.filter((s) => !s.hidden)
+  const views = sections.map((section) => <SectionView key={section.id} section={section} />)
+  if (main) {
+    views.splice(
+      Math.min(main.after, views.length),
+      0,
+      <main key="mw-main" className="mw-main" dangerouslySetInnerHTML={{ __html: cleanHtml(main.html) }} />,
+    )
+  }
   return (
     <div className={doc.styles ? "mw-root mw-exact" : "mw-root"}>
       {doc.styles?.defs && (
@@ -63,11 +79,7 @@ export function PageRenderer({ doc }: { doc: PageDoc }) {
           dangerouslySetInnerHTML={{ __html: cleanHtml(doc.styles.defs) }}
         />
       )}
-      {doc.sections
-        .filter((s) => !s.hidden)
-        .map((section) => (
-          <SectionView key={section.id} section={section} />
-        ))}
+      {views}
     </div>
   )
 }

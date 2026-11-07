@@ -50,6 +50,30 @@ http.route({
   }),
 })
 
+// A published site's blog, read by the edge worker for /blog and /blog/<slug>.
+// Briefly cached at each colo, which bounds how long a new post takes to show.
+http.route({
+  path: "/edge/blog",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const hostname = new URL(request.url).searchParams.get("host")?.toLowerCase()
+    if (!hostname) return json(null, 0)
+    return json(await ctx.runQuery(internal.posts.blogByHost, { hostname }), 10)
+  }),
+})
+
+http.route({
+  path: "/edge/post",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const params = new URL(request.url).searchParams
+    const hostname = params.get("host")?.toLowerCase()
+    const slug = params.get("slug")
+    if (!hostname || !slug) return json(null, 0)
+    return json(await ctx.runQuery(internal.posts.postByHost, { hostname, slug }), 10)
+  }),
+})
+
 // Form submissions from published sites, forwarded by the edge worker's
 // /__forms route. Public like the pages themselves: the hostname picks the
 // site, and leads.submit rate-limits each sender.

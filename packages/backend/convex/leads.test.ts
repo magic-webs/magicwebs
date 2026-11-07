@@ -26,3 +26,15 @@ describe("leadDetails", () => {
     })
   })
 })
+
+import { markdownToHtml } from "./posts"
+
+describe("markdownToHtml", () => {
+  test("renders headings, emphasis, links and lists", () => {
+    const html = markdownToHtml("## Title\n\nSome **bold** and a [link](https://example.com).\n\n- one\n- two")
+    expect(html).toContain("<h2>Title</h2>")
+    expect(html).toContain("<strong>bold</strong>")
+    expect(html).toContain('<a href="https://example.com">link</a>')
+    expect(html).toContain("<li>one</li>")
+  })
+})

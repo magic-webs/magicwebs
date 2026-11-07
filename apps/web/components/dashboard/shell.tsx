@@ -8,6 +8,7 @@ import { api } from "@magicwebs/backend/convex/_generated/api"
 
 import {
   ClockIcon,
+  EditIcon,
   FolderIcon,
   GlobeIcon,
   HomeIcon,
@@ -45,6 +46,7 @@ const NAV = [
   { href: "/dashboard/projects", label: "Projects", icon: FolderIcon, badge: "projects" as const },
   { href: "/dashboard/analytics", label: "Analytics", icon: PieChartIcon },
   { href: "/dashboard/leads", label: "Leads", icon: ListIcon },
+  { href: "/dashboard/blog", label: "Blog", icon: EditIcon },
   { href: "/dashboard/domains", label: "Domains", icon: GlobeIcon },
   { href: "/dashboard/activity", label: "Activity", icon: ClockIcon },
   { href: "/dashboard/usage", label: "Usage", icon: WalletIcon },

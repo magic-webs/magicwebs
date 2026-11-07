@@ -75,6 +75,8 @@ export default defineSchema({
         error: v.optional(v.string()),
       }),
     ),
+    /** The blog's heading and intro, shown at /blog. */
+    blog: v.optional(v.object({ title: v.optional(v.string()), intro: v.optional(v.string()) })),
     /** Forms that don't collect leads, by key (see leads.ts). Every other form does. */
     stoppedForms: v.optional(v.array(v.string())),
     /**
@@ -247,6 +249,35 @@ export default defineSchema({
     .index("by_project_form", ["projectId", "form", "createdAt"])
     .index("by_sender", ["projectId", "sender", "createdAt"])
     .index("by_delivery", ["projectId", "delivery"]),
+
+  /**
+   * Blog posts, served at /blog/<slug> on the published site between its own
+   * header and footer. A post goes live on its own when published, without
+   * publishing the site; a publish date in the future schedules it.
+   */
+  posts: defineTable({
+    projectId: v.id("projects"),
+    slug: v.string(),
+    title: v.string(),
+    excerpt: v.optional(v.string()),
+    cover: v.optional(v.string()),
+    coverAlt: v.optional(v.string()),
+    author: v.optional(v.string()),
+    tags: v.array(v.string()),
+    /** Markdown, as written. */
+    body: v.string(),
+    /** The body as HTML, made on save; sanitized when it renders. */
+    html: v.string(),
+    seoTitle: v.optional(v.string()),
+    seoDescription: v.optional(v.string()),
+    status: v.union(v.literal("draft"), v.literal("published")),
+    publishedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId", "updatedAt"])
+    .index("by_project_slug", ["projectId", "slug"])
+    .index("by_project_live", ["projectId", "status", "publishedAt"]),
 
   /**
    * One page view on a published site, sent by the edge's beacon. Raw views

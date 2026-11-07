@@ -17,6 +17,7 @@
     "@convex-dev/auth": "^0.0.96",
     "@magicwebs/page-schema": "workspace:*",
     "convex": "^1.49.0",
+    "marked": "15.0.12",
     "zod": "^4.6.7"
   }
 }

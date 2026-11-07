@@ -1,4 +1,5 @@
 import { HOME_PATH, pagePath, rewriteSiteLinks, type PageDoc, type SitePage } from "@magicwebs/page-schema"
+import { blogIndexHtml, blogPostHtml, blogShell, type BlogCard, type BlogPost } from "@magicwebs/renderer"
 import { renderPage } from "@magicwebs/renderer/server"
 
 // One Worker serves every published site. The hostname selects the project,
@@ -200,6 +201,47 @@ function fingerprint(value: string): string {
   return (hash >>> 0).toString(36)
 }
 
+type Blog = { title: string; intro?: string; posts: (BlogCard & { updatedAt: number })[] }
+type LivePost = BlogPost & { seoTitle?: string; seoDescription?: string; updatedAt: number }
+
+/** The site's live blog posts, or null when Convex can't say. */
+async function loadBlog(env: Env, hostname: string, ctx: ExecutionContext): Promise<Blog | null> {
+  if (!env.CONVEX_SITE_URL) return null
+  try {
+    return await cachedJson<Blog>(`${env.CONVEX_SITE_URL}/edge/blog?host=${encodeURIComponent(hostname)}`, ctx)
+  } catch (error) {
+    console.error("Blog lookup failed:", error)
+    return null
+  }
+}
+
+function rss(blog: Blog, hostname: string, siteTitle: string): Response {
+  const base = `https://${hostname}/blog`
+  const items = blog.posts
+    .slice(0, 50)
+    .map(
+      (post) =>
+        `<item><title>${escapeXml(post.title)}</title><link>${escapeXml(`${base}/${encodeURIComponent(post.slug)}`)}</link><guid>${escapeXml(
+          `${base}/${encodeURIComponent(post.slug)}`,
+        )}</guid><pubDate>${new Date(post.publishedAt).toUTCString()}</pubDate>${
+          post.excerpt ? `<description>${escapeXml(post.excerpt)}</description>` : ""
+        }</item>`,
+    )
+    .join("")
+  return new Response(
+    `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${escapeXml(`${blog.title} · ${siteTitle}`)}</title><link>${escapeXml(
+      base,
+    )}</link><description>${escapeXml(blog.intro ?? siteTitle)}</description>${items}</channel></rss>`,
+    { headers: { "Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": "public, max-age=300" } },
+  )
+}
+
+/** Put the site's scripts (analytics, forms, widget) at the end of a rendered page. */
+function withScripts(rendered: string, scripts: string): string {
+  const bodyEnd = rendered.lastIndexOf("</body>")
+  return bodyEnd < 0 ? rendered + scripts : rendered.slice(0, bodyEnd) + scripts + rendered.slice(bodyEnd)
+}
+
 const FORM_BODY_MAX = 64_000
 
 /** A form on a published page was sent: hand it to Convex, which files the lead. */
@@ -294,8 +336,16 @@ export default {
     const pages = sitePages(site)
     if (url.pathname === "/sitemap.xml") {
       const lastmod = new Date(site.publishedAt).toISOString()
+      const blog = await loadBlog(env, hostname, ctx)
+      const posts = blog?.posts.length
+        ? [`https://${hostname}/blog`, ...blog.posts.map((p) => `https://${hostname}/blog/${encodeURIComponent(p.slug)}`)].map(
+            (loc, i) =>
+              `<url><loc>${escapeXml(loc)}</loc><lastmod>${new Date(i === 0 ? blog.posts[0]!.updatedAt : blog.posts[i - 1]!.updatedAt).toISOString()}</lastmod></url>`,
+          )
+        : []
       const urls = pages
         .map((p) => `<url><loc>${escapeXml(`https://${hostname}${p.path}`)}</loc><lastmod>${lastmod}</lastmod></url>`)
+        .concat(posts)
         .join("")
       return new Response(
         `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`,
@@ -304,6 +354,62 @@ export default {
     }
     if (url.pathname === "/__version") {
       return Response.json({ version: site.version }, { headers: { "Cache-Control": "no-store" } })
+    }
+
+    // The blog: the site's own header, footer and theme around its posts. A
+    // cloned /blog page keeps its place until the first post is published.
+    const blogPath = url.pathname.replace(/\/+$/, "") || "/"
+    if (blogPath === "/blog" || blogPath.startsWith("/blog/")) {
+      const blog = await loadBlog(env, hostname, ctx)
+      const clonedBlog = pages.some((p) => p.path === blogPath)
+      if (blog && (blog.posts.length > 0 || !clonedBlog)) {
+        if (url.pathname !== blogPath) return Response.redirect(`https://${hostname}${blogPath}${url.search}`, 301)
+        const stored = await loadDoc(env, projectId, site, HOME_PATH, ctx)
+        if (!stored) return notFound("This site hasn't been published yet.")
+        const home = pages.length > 1 ? rewriteSiteLinks(stored, pages.filter((p) => p.source)) : stored
+        if (blogPath === "/blog/rss.xml") return rss(blog, hostname, home.meta.title)
+
+        const slug = blogPath === "/blog" ? null : decodeURIComponent(blogPath.slice("/blog/".length))
+        let post: LivePost | null = null
+        if (slug) {
+          if (slug.includes("/") || !env.CONVEX_SITE_URL) return notFound("Post not found.")
+          post = await cachedJson<LivePost>(
+            `${env.CONVEX_SITE_URL}/edge/post?host=${encodeURIComponent(hostname)}&slug=${encodeURIComponent(slug)}`,
+            ctx,
+          ).catch(() => null)
+          if (!post) return notFound("Post not found.")
+        }
+
+        const widget = site.widget && !site.widget.hiddenPaths.includes("/blog") ? site.widget : null
+        const stopped = site.stoppedForms ?? []
+        const key = fingerprint(JSON.stringify([widget, stopped, blog, post?.updatedAt]))
+        const cacheKey = new Request(`https://render.cache/r${RENDER_REVISION}/${projectId}/v${site.version}/b${key}/${hostname}${encodeURI(blogPath)}`)
+        const hit = await caches.default.match(cacheKey)
+        if (hit) return hit
+
+        const lang = home.meta.lang ?? "en"
+        const { doc, after } = post
+          ? blogShell(home, {
+              title: `${post.seoTitle || post.title} · ${home.meta.title}`,
+              description: post.seoDescription || post.excerpt || home.meta.description,
+              ogImage: post.cover,
+            })
+          : blogShell(home, { title: `${blog.title} · ${home.meta.title}`, description: blog.intro || home.meta.description })
+        const html = post ? blogPostHtml(post, { lang }) : blogIndexHtml(blog.posts, { title: blog.title, intro: blog.intro, lang })
+        const stream = await renderPage(doc, {
+          url: `https://${hostname}${encodeURI(blogPath)}`,
+          main: { html, after },
+          type: post ? "article" : "website",
+          feed: { title: blog.title, href: "/blog/rss.xml" },
+        })
+        const rendered = withScripts(
+          await new Response(stream).text(),
+          ANALYTICS_SCRIPT + formsScript(stopped) + widgetScript(widget, "/blog", doc),
+        )
+        const response = new Response(rendered, { headers: HTML_HEADERS })
+        ctx.waitUntil(caches.default.put(cacheKey, response.clone()))
+        return response
+      }
     }
     let path: string
     try {

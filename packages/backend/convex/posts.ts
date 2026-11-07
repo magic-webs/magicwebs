@@ -3,7 +3,10 @@ import { marked } from "marked"
 
 import type { Doc, Id } from "./_generated/dataModel"
 import { internalQuery, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server"
-import { requireProject, slugify } from "./lib"
+import { addBlogToPage, HOME_PATH } from "@magicwebs/page-schema"
+
+import { findDraft, listPages, loadDoc, requireProject, slugify, storeDoc } from "./lib"
+import { scheduleAutoPublish } from "./versions"
 
 // The blog of a published site. Posts are written in Markdown (in the
 // dashboard, by the AI chat or over MCP), saved as drafts, and published one
@@ -172,12 +175,48 @@ export const update = mutation({
   },
 })
 
-/** Make a post live now, or at `at` (ms since epoch) to schedule it. */
+/**
+ * Link the site to its blog: a "Blog" link in every page's navbar and a
+ * "Latest posts" section on the home page, then publish like any edit does.
+ * Pages that have them already are left alone.
+ */
+async function linkSiteToBlog(ctx: MutationCtx, projectId: Id<"projects">) {
+  const project = await ctx.db.get(projectId)
+  if (!project) return
+  let changed = false
+  for (const page of await listPages(ctx, project)) {
+    const draft = await findDraft(ctx, projectId, page.path)
+    if (!draft) continue
+    const next = addBlogToPage(await loadDoc(ctx, draft.doc), { home: page.path === HOME_PATH })
+    if (!next) continue
+    const revision = draft.revision + 1
+    const now = Date.now()
+    await ctx.db.patch(draft._id, { doc: await storeDoc(ctx, next), revision, updatedAt: now })
+    await ctx.db.insert("edits", {
+      projectId,
+      path: page.path,
+      revision,
+      source: "blog",
+      ops: [],
+      results: [page.path === HOME_PATH ? "Linked the blog in the navbar and added a Latest posts section" : "Linked the blog in the navbar"],
+      createdAt: now,
+    })
+    changed = true
+  }
+  if (changed && project.publishedVersionId) await scheduleAutoPublish(ctx, projectId)
+}
+
+/** Make a post live now, or at `at` (ms since epoch) to schedule it. The site's first post links the site to the blog. */
 export const publish = mutation({
   args: { postId: v.id("posts"), at: v.optional(v.number()) },
   handler: async (ctx, { postId, at }) => {
     const post = await requirePost(ctx, postId)
     if (!post.body.trim()) throw new ConvexError("Write the post before publishing it.")
+    const others = await ctx.db
+      .query("posts")
+      .withIndex("by_project_live", (q) => q.eq("projectId", post.projectId).eq("status", "published"))
+      .first()
+    if (!others) await linkSiteToBlog(ctx, post.projectId)
     const now = Date.now()
     const publishedAt = at ?? (post.status === "published" && post.publishedAt && post.publishedAt <= now ? post.publishedAt : now)
     await ctx.db.patch(postId, { status: "published", publishedAt, updatedAt: now })

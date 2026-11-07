@@ -16,7 +16,7 @@ function versionPages(project: Doc<"projects">, version: Doc<"versions">): Publi
 }
 
 /** One page of a version, ready to render. */
-async function versionPageDoc(ctx: QueryCtx, version: Doc<"versions">, path: string) {
+export async function versionPageDoc(ctx: QueryCtx, version: Doc<"versions">, path: string) {
   if (path === HOME_PATH) return loadDoc(ctx, version.doc)
   const entry = version.pages?.find((p) => p.path === path)
   return entry ? loadDoc(ctx, await loadSnapshot(ctx, entry.snapshot)) : null

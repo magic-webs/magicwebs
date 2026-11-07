@@ -33,6 +33,7 @@ export const SOURCE_LABELS: Record<Doc<"edits">["source"], string> = {
   mcp: "MCP",
   clone: "Clone",
   rollback: "Rollback",
+  blog: "Blog",
 }
 
 const tokenFormat = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 })

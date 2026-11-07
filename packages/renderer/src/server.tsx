@@ -3,6 +3,7 @@ import { renderToReadableStream } from "react-dom/server"
 import type { PageDoc } from "@magicwebs/page-schema"
 
 import { ANIMATION_SCRIPT, BLOG_CSS, fontHref } from "./css"
+import type { BlogCard } from "./blog"
 import { customScript, documentCss, isExact, PageRenderer, rootAttributes, safeSrc, type MainContent } from "./index"
 import { EXACT_RUNTIME_SCRIPT } from "./runtime"
 
@@ -15,9 +16,11 @@ export type RenderOptions = {
   type?: "website" | "article"
   /** Extra tags for the head, e.g. the blog's RSS feed. */
   feed?: { title: string; href: string }
+  /** The site's live blog posts, newest first, for a "Latest posts" section. */
+  posts?: BlogCard[]
 }
 
-function Document({ doc, url, main, type = "website", feed }: { doc: PageDoc } & RenderOptions) {
+function Document({ doc, url, main, type = "website", feed, posts }: { doc: PageDoc } & RenderOptions) {
   const fonts = fontHref(doc.theme)
   const ogImage = safeSrc(doc.meta.ogImage)
   const favicon = safeSrc(doc.meta.favicon)
@@ -45,7 +48,7 @@ function Document({ doc, url, main, type = "website", feed }: { doc: PageDoc } &
         <script dangerouslySetInnerHTML={{ __html: `document.documentElement.classList.add("mw-js")` }} />
       </head>
       <body className={doc.styles?.bodyClass || undefined} {...rootAttributes(doc, "body")}>
-        <PageRenderer doc={doc} main={main} />
+        <PageRenderer doc={doc} main={main} posts={posts && { posts, preview: false }} />
         <script dangerouslySetInnerHTML={{ __html: ANIMATION_SCRIPT }} />
         {exact && <script dangerouslySetInnerHTML={{ __html: EXACT_RUNTIME_SCRIPT }} />}
         {script && <script dangerouslySetInnerHTML={{ __html: script }} />}

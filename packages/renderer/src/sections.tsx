@@ -1,9 +1,10 @@
-import type { CSSProperties, ReactNode } from "react"
+import { useContext, type CSSProperties, type ReactNode } from "react"
 
 import { isIconName, sanitizeCss, sanitizeHtml, type Element, type Image, type Link, type Section, type SectionOf, type SectionType } from "@magicwebs/page-schema"
 
 import { cssValue } from "./css"
 import { Icon } from "./icon"
+import { PostsContext } from "./posts-context"
 
 // Crawled and AI-written content is untrusted: only let through URL schemes
 // that cannot execute script.
@@ -519,6 +520,49 @@ function Form({ section }: { section: SectionOf<"form"> }) {
   )
 }
 
+/**
+ * The site's newest blog posts. They come from PostsContext, which the edge
+ * fills with the live posts on every render, so the section stays current
+ * without publishing. With no posts it shows nothing on the site, and a
+ * placeholder in the editor.
+ */
+function Posts({ section }: { section: SectionOf<"posts"> }) {
+  const p = section.props
+  const { posts, preview } = useContext(PostsContext)
+  const shown = posts.slice(0, Math.min(Math.max(Math.round(p.count) || 3, 1), 12))
+  if (!shown.length && !preview) return null
+  return (
+    <Shell section={section}>
+      <Heading eyebrow={p.eyebrow} heading={p.heading} subheading={p.subheading} center />
+      {shown.length ? (
+        <div className="mw-grid" style={{ "--mw-cols": Math.min(shown.length, 3), marginTop: 48 } as CSSProperties}>
+          {shown.map((post) => (
+            <a key={post.slug} className="mw-card mw-post" href={`/blog/${encodeURIComponent(post.slug)}`}>
+              {post.cover && safeSrc(post.cover) && <img className="mw-card-media" src={safeSrc(post.cover)} alt="" loading="lazy" />}
+              <span className="mw-muted mw-post-date">
+                {new Date(post.publishedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
+              </span>
+              <h3 className="mw-h3">{post.title}</h3>
+              {post.excerpt && <p className="mw-muted">{post.excerpt}</p>}
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p className="mw-muted" style={{ textAlign: "center", marginTop: 32 }}>
+          Your newest blog posts appear here once they&apos;re published.
+        </p>
+      )}
+      {shown.length > 0 && (
+        <div className="mw-actions" style={{ justifyContent: "center", marginTop: 40 }}>
+          <a className="mw-btn mw-btn-secondary" href="/blog">
+            {p.linkLabel || "All posts"}
+          </a>
+        </div>
+      )}
+    </Shell>
+  )
+}
+
 function Cta({ section }: { section: SectionOf<"cta"> }) {
   const p = section.props
   return (
@@ -663,6 +707,7 @@ export const SECTION_COMPONENTS: Registry = {
   faq: Faq,
   gallery: Gallery,
   form: Form,
+  posts: Posts,
   cta: Cta,
   footer: Footer,
   custom: Custom,

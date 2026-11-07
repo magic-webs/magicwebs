@@ -8,6 +8,7 @@ import type { ActivityItem } from "@magicwebs/backend/convex/dashboard"
 import {
   BotIcon,
   CopyIcon,
+  EditIcon,
   PaintBrushIcon,
   RefreshIcon,
   RocketIcon,
@@ -24,6 +25,7 @@ const SOURCE_ICONS = {
   mcp: ServerIcon,
   clone: CopyIcon,
   rollback: RefreshIcon,
+  blog: EditIcon,
 }
 
 const SOURCE_TINTS = {
@@ -32,6 +34,7 @@ const SOURCE_TINTS = {
   mcp: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   clone: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
   rollback: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  blog: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
 }
 
 export function ActivityFeed({ items, compact }: { items: ActivityItem[]; compact?: boolean }) {

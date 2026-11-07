@@ -6,12 +6,16 @@ import {
   action,
   internalAction,
   internalMutation,
+  internalQuery,
   mutation,
   query,
   type ActionCtx,
   type MutationCtx,
 } from "./_generated/server"
-import { findUserByEmail, getViewer, requireProject, sitesRootDomain } from "./lib"
+import { HOME_PATH, pageText, parseSiteDetails, siteProfile, type PageDoc, type SiteDetails } from "@magicwebs/page-schema"
+
+import { versionPageDoc } from "./edgeData"
+import { findDraft, findUserByEmail, getViewer, listPages, loadDoc, queueAgentSync, requireProject, sitesRootDomain } from "./lib"
 import { requireActionUser } from "./users"
 
 // Accounts live on Magic Agent. People sign in there (from our sign-in page,
@@ -289,6 +293,8 @@ export const finishWorkspace = internalMutation({
     if (project.publishedVersionId) await ctx.scheduler.runAfter(0, internal.edge.syncSite, { projectId })
     // Leads sent before the book existed.
     await ctx.scheduler.runAfter(0, internal.leads.deliverPending, { projectId })
+    // A site already cloned fills its workspace now; one still cloning does when it's done.
+    if (project.status === "ready") await queueAgentSync(ctx, projectId)
   },
 })
 
@@ -329,6 +335,183 @@ export const createWorkspace = internalAction({
         workspaceSlug,
         error: error instanceof ConvexError && typeof error.data === "string" ? error.data : "Couldn't reach Magic Agent. Try again.",
       })
+    }
+  },
+})
+
+// --- Keeping the workspace in step with the site ---------------------------------
+
+/**
+ * The site as Magic Agent should know it: the published pages (or the drafts,
+ * before the first publish) as text, and the company details they state.
+ */
+export const siteContent = internalQuery({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const project = await ctx.db.get(projectId)
+    if (!project?.userId || project.magicAgent?.status !== "ready" || !project.magicAgent.workspaceSlug) return null
+    const account = await ctx.db
+      .query("magicAgentAccounts")
+      .withIndex("by_user", (q) => q.eq("userId", project.userId!))
+      .unique()
+    if (!account) return null
+    const version = project.publishedVersionId ? await ctx.db.get(project.publishedVersionId) : null
+    const pages: { path: string; title: string; doc: PageDoc }[] = []
+    for (const page of await listPages(ctx, project)) {
+      let doc: PageDoc | null = null
+      if (version) doc = await versionPageDoc(ctx, version, page.path)
+      else {
+        const draft = await findDraft(ctx, projectId, page.path)
+        if (draft) doc = await loadDoc(ctx, draft.doc)
+      }
+      if (doc) pages.push({ path: page.path, title: page.title, doc })
+    }
+    const home = pages.find((p) => p.path === HOME_PATH)?.doc ?? pages[0]?.doc
+    if (!home) return null
+    const website = `https://${project.slug}.${sitesRootDomain()}`
+    return {
+      workspaceSlug: project.magicAgent.workspaceSlug,
+      sessionToken: account.sessionToken,
+      accountId: account._id,
+      sourceUrl: project.sourceUrl,
+      original: project.originalDetails ?? null,
+      site: { ...siteProfile(home, pages.map((p) => p.doc)), website },
+      pages: pages.map((p) => ({ path: p.path, title: p.title, text: pageText(p.doc) })),
+    }
+  },
+})
+
+const ORIGINAL_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const ORIGINAL_MAX_BYTES = 3_000_000
+
+/** Read what the original website states about the business. Null when it can't be fetched. */
+async function fetchOriginalDetails(url: string): Promise<SiteDetails | null> {
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; MagicwebsBot/1.0; +https://magicwebs.ai)", Accept: "text/html" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!response.ok || !(response.headers.get("content-type") ?? "").includes("html")) return null
+    const html = (await response.text()).slice(0, ORIGINAL_MAX_BYTES)
+    return parseSiteDetails(html, response.url || url)
+  } catch {
+    return null
+  }
+}
+
+export const saveOriginalDetails = internalMutation({
+  args: { projectId: v.id("projects"), details: v.any() },
+  handler: async (ctx, { projectId, details }) => {
+    if (await ctx.db.get(projectId)) await ctx.db.patch(projectId, { originalDetails: { fetchedAt: Date.now(), details } })
+  },
+})
+
+type SiteFacts = ReturnType<typeof siteProfile> & { website: string }
+
+/**
+ * The company profile for Magic Agent: what the original site declares about
+ * itself first (it is the business's own statement), then what the new site
+ * shows. The logo the new site displays wins, as it is the one visitors see.
+ */
+function companyProfile(site: SiteFacts, original: SiteDetails | null) {
+  const facts: { key: string; value: string }[] = []
+  const add = (key: string, value: string | undefined) => value && facts.push({ key, value })
+  add("Opening hours", original?.openingHours)
+  add("Price range", original?.priceRange)
+  add("Areas served", original?.areaServed)
+  add("Founded", original?.foundingDate)
+  for (const [network, link] of Object.entries(original?.socials ?? {})) add(network, link)
+  return {
+    profile: {
+      description: original?.description ?? site.description,
+      tagline: site.tagline,
+      industry: original?.industry,
+      address: original?.address,
+      supportEmail: original?.email ?? site.supportEmail,
+      supportPhone: original?.phone ?? site.supportPhone,
+      website: site.website,
+      logoUrl: site.logo ?? original?.logo,
+    },
+    facts,
+  }
+}
+
+export const noteAgentSync = internalMutation({
+  args: { projectId: v.id("projects"), error: v.optional(v.string()), accountId: v.optional(v.id("magicAgentAccounts")) },
+  handler: async (ctx, { projectId, error, accountId }) => {
+    if (accountId && (await ctx.db.get(accountId))) await ctx.db.patch(accountId, { expiresAt: 0 })
+    const project = await ctx.db.get(projectId)
+    if (!project) return
+    await ctx.db.patch(projectId, {
+      agentSync: error ? { ...project.agentSync, scheduledId: undefined, error } : { syncedAt: Date.now() },
+    })
+  },
+})
+
+/**
+ * Fill the workspace from the site: the company details it doesn't have yet,
+ * a front desk and a marketing desk, and one knowledge source per page,
+ * refreshed when the page changes.
+ */
+export const syncAgent = internalAction({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const content = await ctx.runQuery(internal.magicAgent.siteContent, { projectId })
+    if (!content) return
+    try {
+      const token = await accessToken(content.sessionToken)
+      if (!token) {
+        await ctx.runMutation(internal.magicAgent.noteAgentSync, {
+          projectId,
+          error: "Your Magic account sign-in has ended. Sign in again to keep the agent in step with the site.",
+          accountId: content.accountId,
+        })
+        return
+      }
+      let original = (content.original?.details as SiteDetails | undefined) ?? null
+      if (!content.original || Date.now() - content.original.fetchedAt > ORIGINAL_TTL_MS) {
+        original = (await fetchOriginalDetails(content.sourceUrl)) ?? original
+        await ctx.runMutation(internal.magicAgent.saveOriginalDetails, { projectId, details: original ?? { socials: {} } })
+      }
+      const { profile, facts } = companyProfile(content.site, original)
+      await call("mutation", "websites:setUp", { workspaceSlug: content.workspaceSlug, profile, facts, pages: content.pages }, token)
+      await ctx.runMutation(internal.magicAgent.noteAgentSync, { projectId })
+    } catch (error) {
+      console.error("magicAgent.syncAgent failed:", error)
+      await ctx.runMutation(internal.magicAgent.noteAgentSync, {
+        projectId,
+        error: error instanceof ConvexError && typeof error.data === "string" ? error.data : "Couldn't reach Magic Agent. Try again.",
+      })
+    }
+  },
+})
+
+/** Sync the workspace with the site now. */
+export const syncAgentNow = mutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const project = await requireProject(ctx, projectId)
+    if (project.magicAgent?.status !== "ready") throw new ConvexError("This site's Magic Agent workspace isn't ready yet.")
+    await queueAgentSync(ctx, projectId)
+  },
+})
+
+/** How the workspace's setup from the site stands, for the editor. */
+export const agentStatus = query({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const project = await requireProject(ctx, projectId)
+    let pending = false
+    if (project.agentSync?.scheduledId) {
+      const job = await ctx.db.system.get(project.agentSync.scheduledId)
+      pending = job?.state.kind === "pending" || job?.state.kind === "inProgress"
+    }
+    return {
+      workspace: project.magicAgent ?? null,
+      syncedAt: project.agentSync?.syncedAt ?? null,
+      error: project.agentSync?.error ?? null,
+      pending,
     }
   },
 })

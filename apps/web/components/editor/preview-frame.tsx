@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import type { PageDoc } from "@magicwebs/page-schema"
-import { documentCss, fontHref, PageRenderer, rootAttributes, syncMediaClasses } from "@magicwebs/renderer"
+import { documentCss, fontHref, PageRenderer, rootAttributes, syncMediaClasses, type BlogCard } from "@magicwebs/renderer"
 
 export type Device = "desktop" | "tablet" | "mobile"
 
@@ -33,11 +33,14 @@ export function PreviewFrame({
   device,
   selectedId,
   onSelect,
+  posts = [],
 }: {
   doc: PageDoc
   device: Device
   selectedId: string | null
   onSelect: (sectionId: string | null) => void
+  /** The site's live blog posts, for a "Latest posts" section. */
+  posts?: BlogCard[]
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const [body, setBody] = useState<HTMLElement | null>(null)
@@ -117,7 +120,7 @@ export function PreviewFrame({
           <>
             {fonts && <link rel="stylesheet" href={fonts} />}
             <style>{documentCss(doc) + EDITOR_CSS + selectedCss}</style>
-            <PageRenderer doc={doc} />
+            <PageRenderer doc={doc} posts={{ posts, preview: true }} />
           </>,
           body,
         )}

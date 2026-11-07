@@ -77,6 +77,19 @@ export default defineSchema({
     ),
     /** The blog's heading and intro, shown at /blog. */
     blog: v.optional(v.object({ title: v.optional(v.string()), intro: v.optional(v.string()) })),
+    /**
+     * Keeping the workspace in step with the site: company details, front
+     * desk, marketing desk and a knowledge source per page (magicAgent.syncAgent).
+     */
+    agentSync: v.optional(
+      v.object({
+        scheduledId: v.optional(v.id("_scheduled_functions")),
+        syncedAt: v.optional(v.number()),
+        error: v.optional(v.string()),
+      }),
+    ),
+    /** What the original website states about the business (parseSiteDetails), cached for a week. */
+    originalDetails: v.optional(v.object({ fetchedAt: v.number(), details: v.any() })),
     /** Forms that don't collect leads, by key (see leads.ts). Every other form does. */
     stoppedForms: v.optional(v.array(v.string())),
     /**
@@ -138,7 +151,15 @@ export default defineSchema({
   edits: defineTable({
     projectId: v.id("projects"),
     revision: v.number(),
-    source: v.union(v.literal("editor"), v.literal("ai"), v.literal("mcp"), v.literal("clone"), v.literal("rollback")),
+    source: v.union(
+      v.literal("editor"),
+      v.literal("ai"),
+      v.literal("mcp"),
+      v.literal("clone"),
+      v.literal("rollback"),
+      /** The pages linked to the blog when its first post was published. */
+      v.literal("blog"),
+    ),
     ops: v.array(v.any()),
     results: v.array(v.string()),
     /** The page edited; missing means the home page. */

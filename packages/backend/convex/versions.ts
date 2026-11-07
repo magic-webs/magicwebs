@@ -16,10 +16,13 @@ import {
   ownedProject,
   requireProject,
   snapshotDoc,
+  queueAgentSync,
 } from "./lib"
 
 /** How long after the last edit the draft is published automatically. */
 const AUTO_PUBLISH_DELAY_MS = 1000
+/** Edits auto-publish, so the workspace's knowledge waits for a quiet moment. */
+const AGENT_SYNC_DELAY_MS = 2 * 60 * 1000
 
 export const list = query({
   args: { projectId: v.id("projects") },
@@ -73,6 +76,7 @@ async function publishDraft(ctx: MutationCtx, projectId: Id<"projects">, note?: 
   const versionId = await ctx.db.insert("versions", { projectId, number, doc: home.doc, pages, note, createdAt: now })
   await ctx.db.patch(projectId, { publishedVersionId: versionId, publishedAt: now, autoPublishId: undefined })
   await ctx.scheduler.runAfter(0, internal.edge.syncSite, { projectId })
+  await queueAgentSync(ctx, projectId, AGENT_SYNC_DELAY_MS)
   return { versionId, number }
 }
 

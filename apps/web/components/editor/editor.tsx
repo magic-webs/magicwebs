@@ -40,6 +40,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
   // A page removed elsewhere (another tab, an agent) falls back to the home page.
   const path = !pages || pages.some((p) => p.path === openPath) ? openPath : "/"
   const draft = useQuery(api.drafts.get, { projectId, path })
+  const allPosts = useQuery(api.posts.list, { projectId })
   const publish = useMutation(api.versions.publish)
   const reclone = useMutation(api.projects.reclone)
   const { apply, error, clearError } = useApplyOps(projectId, path)
@@ -74,6 +75,10 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
   }
 
   const doc = draft.doc
+  const livePosts = (allPosts ?? [])
+    .filter((p) => p.status === "published" && !p.scheduled && p.publishedAt)
+    .sort((a, b) => b.publishedAt! - a.publishedAt!)
+    .map((p) => ({ slug: p.slug, title: p.title, excerpt: p.excerpt, cover: p.cover, tags: p.tags, publishedAt: p.publishedAt! }))
   const selected = doc.sections.find((s) => s.id === selectedId) ?? null
   const isEmpty = doc.sections.length === 0
   const page = pages.find((p) => p.path === path) ?? pages[0]!
@@ -212,7 +217,7 @@ export function Editor({ projectId }: { projectId: Id<"projects"> }) {
               )}
             </div>
           ) : (
-            <PreviewFrame doc={doc} device={device} selectedId={selectedId} onSelect={setSelectedId} />
+            <PreviewFrame doc={doc} device={device} selectedId={selectedId} onSelect={setSelectedId} posts={livePosts} />
           )}
         </main>
 

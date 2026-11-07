@@ -3,6 +3,7 @@ import { ConvexError } from "convex/values"
 
 import { HOME_PATH, MAX_SITE_PAGES, type PageDoc } from "@magicwebs/page-schema"
 
+import { internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "./_generated/server"
 
@@ -282,6 +283,21 @@ export async function setPageState(
  * failed only when every page failed, otherwise ready (naming failed pages).
  * The step shows what the cloning pages are doing.
  */
+/**
+ * Set the site's Magic Agent workspace up from its content after `delayMs`,
+ * replacing a sync already waiting, so a burst of publishes syncs once.
+ */
+export async function queueAgentSync(ctx: MutationCtx, projectId: Id<"projects">, delayMs = 0) {
+  const project = await ctx.db.get(projectId)
+  if (project?.magicAgent?.status !== "ready") return
+  if (project.agentSync?.scheduledId) {
+    const waiting = await ctx.db.system.get(project.agentSync.scheduledId)
+    if (waiting?.state.kind === "pending") await ctx.scheduler.cancel(project.agentSync.scheduledId)
+  }
+  const scheduledId = await ctx.scheduler.runAfter(delayMs, internal.magicAgent.syncAgent, { projectId })
+  await ctx.db.patch(projectId, { agentSync: { ...project.agentSync, scheduledId } })
+}
+
 export async function syncProjectStatus(ctx: MutationCtx, projectId: Id<"projects">) {
   const pages = await ctx.db
     .query("pages")
@@ -304,7 +320,10 @@ export async function syncProjectStatus(ctx: MutationCtx, projectId: Id<"project
     const error = failed.length
       ? `${failed.length === 1 ? "1 page" : `${failed.length} pages`} couldn't be cloned: ${failed.map((p) => p.title).join(", ")}`
       : undefined
+    const before = await ctx.db.get(projectId)
     await ctx.db.patch(projectId, { status: "ready", step: undefined, error })
+    // The pages are in: their content can fill the workspace's knowledge.
+    if (before?.status === "cloning") await queueAgentSync(ctx, projectId)
   }
 }
 

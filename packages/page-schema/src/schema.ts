@@ -219,6 +219,13 @@ export const SectionPropsSchemas = {
     submitLabel: z.string(),
     successMessage: z.string().describe("Shown in place of the form once it is sent"),
   }),
+  posts: z.object({
+    eyebrow: z.string().optional(),
+    heading: z.string().optional(),
+    subheading: z.string().optional(),
+    count: z.number().describe("How many of the newest blog posts to show, 1 to 12. The posts come from the site's blog and update by themselves"),
+    linkLabel: z.string().optional().describe('Label of the link to the whole blog, default "All posts"'),
+  }),
   footer: z.object({
     brand: z.string().optional(),
     logo: ImageSchema.optional(),
@@ -264,6 +271,7 @@ export const SectionSchema = z.discriminatedUnion("type", [
   sectionVariant("faq"),
   sectionVariant("gallery"),
   sectionVariant("form"),
+  sectionVariant("posts"),
   sectionVariant("cta"),
   sectionVariant("footer"),
   sectionVariant("custom"),

@@ -428,7 +428,10 @@ export default {
     const cache = caches.default
     const widget = site.widget && !site.widget.hiddenPaths.includes(path) ? site.widget : null
     const stopped = site.stoppedForms ?? []
-    const widgetKey = fingerprint(JSON.stringify([widget, stopped]))
+    // A "Latest posts" section shows the live posts, so they are part of the key.
+    const blog = await loadBlog(env, hostname, ctx)
+    const posts = blog?.posts ?? []
+    const widgetKey = fingerprint(JSON.stringify([widget, stopped, posts.map((p) => [p.slug, p.updatedAt])]))
     const cacheKey = new Request(
       `https://render.cache/r${RENDER_REVISION}/${projectId}/v${site.version}/w${widgetKey}/${hostname}${encodeURI(path)}`,
     )
@@ -439,7 +442,7 @@ export default {
     if (!stored) return notFound("This site hasn't been published yet.")
     // Links between the cloned pages point at the clone's own paths.
     const doc = pages.length > 1 ? rewriteSiteLinks(stored, pages.filter((p) => p.source)) : stored
-    const stream = await renderPage(doc, { url: `https://${hostname}${encodeURI(path)}` })
+    const stream = await renderPage(doc, { url: `https://${hostname}${encodeURI(path)}`, posts })
     const rendered = await new Response(stream).text()
     const script = liveReloadScript(site.version) + ANALYTICS_SCRIPT + formsScript(stopped) + widgetScript(widget, path, stored)
     const bodyEnd = rendered.lastIndexOf("</body>")

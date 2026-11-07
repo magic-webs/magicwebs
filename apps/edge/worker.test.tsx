@@ -25,7 +25,9 @@ test("renders published page with all section types", async () => {
   expect(res.status).toBe(200)
   expect(res.headers.get("cache-control")).toContain("must-revalidate")
   const html = await res.text()
-  for (const t of SECTION_TYPES) expect(html).toContain(`data-section-type="${t}"`)
+  // "Latest posts" shows only when the site has posts, and this one has none.
+  for (const t of SECTION_TYPES.filter((t) => t !== "posts")) expect(html).toContain(`data-section-type="${t}"`)
+  expect(html).not.toContain('data-section-type="posts"')
   expect(html).toContain("<title>Edge test</title>")
   expect(html).toContain('rel="canonical" href="https://acme.magicwebs.site/"')
   await Promise.all(waits)

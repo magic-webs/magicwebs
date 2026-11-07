@@ -39,6 +39,7 @@ export const NewSectionSchema = z.discriminatedUnion("type", [
   newSectionVariant("faq"),
   newSectionVariant("gallery"),
   newSectionVariant("form"),
+  newSectionVariant("posts"),
   newSectionVariant("cta"),
   newSectionVariant("footer"),
   newSectionVariant("custom"),

@@ -54,3 +54,23 @@ describe("blog markup", () => {
     expect(html.indexOf("Hello")).toBeLessThan(html.indexOf("<p>Body</p>"))
   })
 })
+
+describe("Latest posts section", async () => {
+  const { renderToString } = await import("react-dom/server")
+  const { PageRenderer } = await import("./index")
+  const doc = page([{ id: "p", type: "posts", props: { heading: "Latest", count: 2 } }])
+  const post = (slug: string, title: string) => ({ slug, title, tags: [], publishedAt: Date.UTC(2026, 10, 1) })
+
+  test("shows the newest posts up to its count, with a link to the blog", () => {
+    const html = renderToString(<PageRenderer doc={doc} posts={{ posts: [post("a", "First"), post("b", "Second"), post("c", "Third")], preview: false }} />)
+    expect(html).toContain('href="/blog/a"')
+    expect(html).toContain("Second")
+    expect(html).not.toContain("Third")
+    expect(html).toContain('href="/blog"')
+  })
+
+  test("shows nothing on the site without posts, and a placeholder in the editor", () => {
+    expect(renderToString(<PageRenderer doc={doc} posts={{ posts: [], preview: false }} />)).not.toContain("Latest")
+    expect(renderToString(<PageRenderer doc={doc} posts={{ posts: [], preview: true }} />)).toContain("appear here")
+  })
+})

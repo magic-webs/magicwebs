@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react"
 import type { FunctionArgs } from "convex/server"
+import { formatDistanceToNow } from "date-fns"
 import { useState } from "react"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
@@ -138,6 +139,8 @@ export function WidgetPanel({ projectId, path, primary }: { projectId: Id<"proje
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      <AgentSync projectId={projectId} />
+
       {MAGIC_AGENT_URL && widget.workspaceSlug && (
         <a
           href={`${MAGIC_AGENT_URL}/w/${widget.workspaceSlug}`}
@@ -148,6 +151,56 @@ export function WidgetPanel({ projectId, path, primary }: { projectId: Id<"proje
           Set up the agent&apos;s answers in Magic Agent →
         </a>
       )}
+    </div>
+  )
+}
+
+/**
+ * The workspace behind the widget, set up from the site: its company details,
+ * front desk, marketing desk and a knowledge source per page, refreshed a
+ * couple of minutes after each publish.
+ */
+function AgentSync({ projectId }: { projectId: Id<"projects"> }) {
+  const status = useQuery(api.magicAgent.agentStatus, { projectId })
+  const syncNow = useMutation(api.magicAgent.syncAgentNow)
+  const [error, setError] = useState<string | null>(null)
+  if (!status || status.workspace?.status !== "ready") return null
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3">
+      <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Agent setup</h4>
+      <p className="text-xs text-muted-foreground">
+        Your company details, a front desk, a marketing agent and a knowledge base made from your pages, kept in step a couple of
+        minutes after each publish.
+      </p>
+      <p className="text-xs">
+        {status.pending ? (
+          <span className="flex items-center gap-1.5">
+            <Spinner className="size-3" /> Syncing with the site…
+          </span>
+        ) : status.error ? (
+          <span className="text-destructive">{status.error}</span>
+        ) : status.syncedAt ? (
+          `Synced ${formatDistanceToNow(status.syncedAt, { addSuffix: true })}`
+        ) : (
+          "Not synced yet."
+        )}
+      </p>
+      <button
+        type="button"
+        disabled={status.pending}
+        className="self-start text-xs font-medium underline-offset-4 hover:underline disabled:opacity-50"
+        onClick={async () => {
+          setError(null)
+          try {
+            await syncNow({ projectId })
+          } catch (err) {
+            setError(errorText(err))
+          }
+        }}
+      >
+        Sync now
+      </button>
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )
 }

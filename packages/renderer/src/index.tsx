@@ -3,10 +3,13 @@ import type { ReactNode } from "react"
 import { sanitizeCss, type PageDoc, type Section } from "@magicwebs/page-schema"
 
 import { EXACT_CSS, pageCss } from "./css"
+import type { BlogCard } from "./blog"
+import { PostsContext } from "./posts-context"
 import { cleanHtml, SECTION_COMPONENTS } from "./sections"
 
 export { ANIMATION_SCRIPT, BLOG_CSS, EXACT_CSS, fontHref, pageCss } from "./css"
 export { blogIndexHtml, blogPostHtml, blogShell, type BlogCard, type BlogPost } from "./blog"
+export { PostsContext } from "./posts-context"
 export { exactRuntime, EXACT_RUNTIME_SCRIPT, syncMediaClasses } from "./runtime"
 export { SECTION_COMPONENTS, safeHref, safeSrc } from "./sections"
 export { templateCss } from "./templates"
@@ -60,7 +63,16 @@ export function SectionView({ section }: { section: Section }): ReactNode {
  */
 export type MainContent = { html: string; after: number }
 
-export function PageRenderer({ doc, main }: { doc: PageDoc; main?: MainContent }) {
+export function PageRenderer({
+  doc,
+  main,
+  posts,
+}: {
+  doc: PageDoc
+  main?: MainContent
+  /** The site's live blog posts, for a "Latest posts" section; `preview` in the editor. */
+  posts?: { posts: BlogCard[]; preview: boolean }
+}) {
   const sections = doc.sections.filter((s) => !s.hidden)
   const views = sections.map((section) => <SectionView key={section.id} section={section} />)
   if (main) {
@@ -70,7 +82,7 @@ export function PageRenderer({ doc, main }: { doc: PageDoc; main?: MainContent }
       <main key="mw-main" className="mw-main" dangerouslySetInnerHTML={{ __html: cleanHtml(main.html) }} />,
     )
   }
-  return (
+  const page = (
     <div className={doc.styles ? "mw-root mw-exact" : "mw-root"}>
       {doc.styles?.defs && (
         <div
@@ -82,4 +94,5 @@ export function PageRenderer({ doc, main }: { doc: PageDoc; main?: MainContent }
       {views}
     </div>
   )
+  return posts ? <PostsContext.Provider value={posts}>{page}</PostsContext.Provider> : page
 }

@@ -126,6 +126,9 @@ export function pageCss(theme: Theme): string {
 .mw-form .mw-hp{position:absolute;left:-10000px;width:1px;height:1px;opacity:0}
 .mw-form-done{padding:8px 0;font-size:1.05rem;font-weight:500}
 .mw-form-error{color:#dc2626;font-size:.9rem}
+.mw-post{color:inherit;text-decoration:none;gap:8px;transition:transform .15s ease}
+.mw-post:hover{transform:translateY(-2px)}
+.mw-post-date{font-size:.85rem}
 .mw-footer{padding:64px 24px 40px;border-top:1px solid var(--mw-border)}
 .mw-footer-grid{display:grid;grid-template-columns:1.5fr repeat(var(--mw-cols,3),1fr);gap:40px;max-width:var(--mw-max);margin:0 auto}
 .mw-footer ul{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}

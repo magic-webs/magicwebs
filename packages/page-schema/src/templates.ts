@@ -113,6 +113,10 @@ export const SECTION_TEMPLATES: { [T in SectionType]: Extract<NewSection, { type
       successMessage: "Thanks! We'll be in touch soon.",
     },
   },
+  posts: {
+    type: "posts",
+    props: { heading: "Latest from the blog", count: 3, linkLabel: "All posts" },
+  },
   cta: {
     type: "cta",
     props: { heading: "Ready to get started?", subheading: "One line to remove doubt.", primaryCta: { label: "Get started", href: "#" } },

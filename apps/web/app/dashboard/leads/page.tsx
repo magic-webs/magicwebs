@@ -1,8 +1,8 @@
 "use client"
 
-import { useMutation, useQuery } from "convex/react"
+import { useAction, useMutation, useQuery } from "convex/react"
 import { formatDistanceToNow } from "date-fns"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 import type { Doc, Id } from "@magicwebs/backend/convex/_generated/dataModel"
@@ -61,7 +61,7 @@ export default function LeadsPage() {
     <>
       <PageHeader
         title="Leads"
-        description="What visitors send through your sites' forms. Every lead also lands in the site's Magic Agent workspace."
+        description="What visitors send through your sites' forms and leave in the chat widget. Every lead also lands in the site's Magic Agent workspace."
         action={
           projects && projects.length > 1 ? (
             <NativeSelect value={projectId ?? ""} onChange={(e) => setChosen(e.target.value as Id<"projects">)} aria-label="Site">
@@ -147,9 +147,18 @@ function Leads({ projectId, name }: { projectId: Id<"projects">; name: string })
   const leads = useQuery(api.leads.list, { projectId, limit: 1000 })
   const forms = useQuery(api.leads.forms, { projectId })
   const retry = useMutation(api.leads.retryDelivery)
+  const syncChat = useAction(api.magicAgent.syncChatLeads)
   const [notice, setNotice] = useState<string | null>(null)
   const undelivered = leads?.filter((l) => l.delivery !== "sent").length ?? 0
   const workspace = forms?.workspace
+  const agentBase = workspace?.workspaceSlug && MAGIC_AGENT_URL ? `${MAGIC_AGENT_URL}/w/${workspace.workspaceSlug}` : null
+
+  // The chat widget's leads live in Magic Agent; bring them over each time the page opens.
+  useEffect(() => {
+    syncChat({ projectId }).catch(() => {
+      // The form leads still show; the chat ones come on the next visit.
+    })
+  }, [projectId, syncChat])
 
   return (
     <Card>
@@ -157,10 +166,10 @@ function Leads({ projectId, name }: { projectId: Id<"projects">; name: string })
         <div className="flex flex-col gap-1.5">
           <CardTitle>Submissions</CardTitle>
           <CardDescription>
-            {workspace?.workspaceSlug && MAGIC_AGENT_URL ? (
+            {agentBase ? (
               <a
                 className="underline-offset-4 hover:underline"
-                href={`${MAGIC_AGENT_URL}/w/${workspace.workspaceSlug}`}
+                href={agentBase}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -198,14 +207,16 @@ function Leads({ projectId, name }: { projectId: Id<"projects">; name: string })
         {leads === undefined ? (
           <Skeleton className="h-32" />
         ) : leads.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No leads yet. They appear here as soon as someone sends a form.</p>
+          <p className="text-sm text-muted-foreground">
+            No leads yet. They appear here as soon as someone sends a form or leaves their details in the chat.
+          </p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Who</TableHead>
                 <TableHead>Message</TableHead>
-                <TableHead>Page</TableHead>
+                <TableHead>From</TableHead>
                 <TableHead>Magic Agent</TableHead>
                 <TableHead className="text-right">When</TableHead>
               </TableRow>
@@ -224,14 +235,33 @@ function Leads({ projectId, name }: { projectId: Id<"projects">; name: string })
                       className="line-clamp-2 text-sm whitespace-normal"
                       title={lead.fields.map((f) => `${f.key}: ${f.value}`).join("\n")}
                     >
-                      {lead.message ?? lead.fields.map((f) => `${f.key}: ${f.value}`).join(" · ")}
+                      {lead.source === "chat"
+                        ? (lead.message ?? <span className="text-muted-foreground">Left their details</span>)
+                        : (lead.message ?? lead.fields.map((f) => `${f.key}: ${f.value}`).join(" · "))}
                     </div>
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{lead.path}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {lead.source === "chat" ? <Badge variant="outline">Chat</Badge> : lead.path}
+                  </TableCell>
                   <TableCell>
-                    <Badge variant={lead.delivery === "failed" ? "destructive" : "secondary"} title={lead.deliveryError}>
-                      {lead.delivery === "sent" ? "Sent" : lead.delivery === "failed" ? "Failed" : "Waiting"}
-                    </Badge>
+                    {lead.source === "chat" ? (
+                      agentBase && lead.chatConversationId ? (
+                        <a
+                          className="text-sm underline-offset-4 hover:underline"
+                          href={`${agentBase}/conversations?c=${lead.chatConversationId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open chat →
+                        </a>
+                      ) : (
+                        <Badge variant="secondary">In Magic Agent</Badge>
+                      )
+                    ) : (
+                      <Badge variant={lead.delivery === "failed" ? "destructive" : "secondary"} title={lead.deliveryError}>
+                        {lead.delivery === "sent" ? "Sent" : lead.delivery === "failed" ? "Failed" : "Waiting"}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
                     {formatDistanceToNow(lead.createdAt, { addSuffix: true })}

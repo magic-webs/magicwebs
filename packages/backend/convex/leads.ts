@@ -178,6 +178,78 @@ export const retryDelivery = mutation({
   },
 })
 
+/** The form key chat leads are filed under; no form on a page has it. */
+export const CHAT_FORM = "chat"
+
+const maybe = v.union(v.string(), v.null())
+
+/** One lead as Magic Agent's websites:chatLeads returns it. */
+export const chatLead = v.object({
+  contactId: v.string(),
+  conversationId: maybe,
+  name: maybe,
+  phone: maybe,
+  email: maybe,
+  company: maybe,
+  message: maybe,
+  createdAt: v.number(),
+})
+
+/** Keep the chat widget's leads (pulled from Magic Agent by magicAgent.syncChatLeads) in step, one row per contact. */
+export const saveChatLeads = internalMutation({
+  args: { projectId: v.id("projects"), leads: v.array(chatLead) },
+  handler: async (ctx, { projectId, leads }) => {
+    for (const chat of leads) {
+      const details = {
+        name: chat.name?.slice(0, MAX_VALUE) || undefined,
+        email: chat.email?.slice(0, MAX_VALUE) || undefined,
+        phone: chat.phone?.slice(0, MAX_VALUE) || undefined,
+        company: chat.company?.slice(0, MAX_VALUE) || undefined,
+        message: chat.message?.slice(0, MAX_VALUE) || undefined,
+        chatConversationId: chat.conversationId ?? undefined,
+      }
+      const fields = (["name", "email", "phone", "company", "message"] as const).flatMap((key) =>
+        details[key] ? [{ key, value: details[key]! }] : [],
+      )
+      const existing = await ctx.db
+        .query("leads")
+        .withIndex("by_chat_contact", (q) => q.eq("projectId", projectId).eq("chatContactId", chat.contactId))
+        .first()
+      if (existing) {
+        await ctx.db.patch(existing._id, { ...details, fields })
+      } else {
+        await ctx.db.insert("leads", {
+          projectId,
+          path: "",
+          form: CHAT_FORM,
+          ...details,
+          fields,
+          // It is already in Magic Agent: that's where it came from.
+          delivery: "sent",
+          source: "chat",
+          chatContactId: chat.contactId,
+          createdAt: chat.createdAt,
+        })
+      }
+    }
+  },
+})
+
+/** What syncChatLeads needs to ask Magic Agent, for a site the caller owns. */
+export const chatLeadSource = internalQuery({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const project = await requireProject(ctx, projectId)
+    const workspaceSlug = project.magicAgent?.status === "ready" ? project.magicAgent.workspaceSlug : undefined
+    if (!workspaceSlug || !project.userId) return null
+    const account = await ctx.db
+      .query("magicAgentAccounts")
+      .withIndex("by_user", (q) => q.eq("userId", project.userId!))
+      .unique()
+    return account ? { workspaceSlug, sessionToken: account.sessionToken } : null
+  },
+})
+
 /** A site's leads, newest first. */
 export const list = query({
   args: { projectId: v.id("projects"), form: v.optional(v.string()), limit: v.optional(v.number()) },

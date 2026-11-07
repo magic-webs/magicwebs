@@ -264,12 +264,18 @@ export default defineSchema({
     sender: v.optional(v.string()),
     delivery: v.union(v.literal("pending"), v.literal("sent"), v.literal("failed")),
     deliveryError: v.optional(v.string()),
+    /** Where it came from: a form on the site (the default) or the Magic Agent chat widget. */
+    source: v.optional(v.union(v.literal("form"), v.literal("chat"))),
+    /** Chat leads: the Magic Agent contact and conversation they belong to. */
+    chatContactId: v.optional(v.string()),
+    chatConversationId: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_project", ["projectId", "createdAt"])
     .index("by_project_form", ["projectId", "form", "createdAt"])
     .index("by_sender", ["projectId", "sender", "createdAt"])
-    .index("by_delivery", ["projectId", "delivery"]),
+    .index("by_delivery", ["projectId", "delivery"])
+    .index("by_chat_contact", ["projectId", "chatContactId"]),
 
   /**
    * Blog posts, served at /blog/<slug> on the published site between its own

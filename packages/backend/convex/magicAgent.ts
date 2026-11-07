@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values"
+import { ConvexError, v, type Infer } from "convex/values"
 
 import { internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
@@ -15,6 +15,7 @@ import {
 import { HOME_PATH, pageText, parseSiteDetails, siteProfile, type PageDoc, type SiteDetails } from "@magicwebs/page-schema"
 
 import { versionPageDoc } from "./edgeData"
+import type { chatLead } from "./leads"
 import { findDraft, findUserByEmail, getViewer, listPages, loadDoc, queueAgentSync, requireProject, sitesRootDomain } from "./lib"
 import { requireActionUser } from "./users"
 
@@ -37,6 +38,8 @@ function requireDeploymentUrl(): string {
   if (!url) throw new ConvexError("Magic Agent isn't connected to this deployment")
   return url
 }
+
+type ChatLead = Infer<typeof chatLead>
 
 type Reply<T> = { status: "success"; value: T } | { status: "error"; errorMessage?: string; errorData?: unknown }
 
@@ -449,10 +452,33 @@ export const noteAgentSync = internalMutation({
   },
 })
 
+/** Pages that make poor welcome-menu options: the visitor has just given their details, and nobody opens a chat for the legal small print. */
+const NOT_A_TOPIC = /\b(contact|privacy|terms|policy|policies|legal|cookies?|disclaimer|login|sign[ -]?(in|up)|cart|checkout|sitemap|404)\b/i
+
+/**
+ * The welcome menu's options: the site's own pages, in site order, so a visitor
+ * can pick what they came for. These workspaces have no specialists, so without
+ * them Magic Agent sends no welcome menu, and a widget visitor who has just
+ * given their name and number gets no reply. Magic Agent saves them only while
+ * the workspace has no menu, and trims each title to fit a button.
+ */
+function welcomeOptions(pages: { path: string; title: string }[]): { title: string }[] {
+  const options: { title: string }[] = []
+  for (const page of pages) {
+    if (page.path === HOME_PATH) continue
+    // "Magic 360 – WhatsApp Platform | MagicWebs" → "Magic 360"
+    const title = page.title.split(/\s+[|–—-]\s+|\s*\|\s*/)[0]?.trim()
+    if (!title || NOT_A_TOPIC.test(title) || NOT_A_TOPIC.test(page.path)) continue
+    options.push({ title })
+    if (options.length === 9) break
+  }
+  return options.length ? options : [{ title: "Our services" }, { title: "Talk to someone" }]
+}
+
 /**
  * Fill the workspace from the site: the company details it doesn't have yet,
- * a front desk and a marketing desk, and one knowledge source per page,
- * refreshed when the page changes.
+ * a front desk and a marketing desk, a welcome menu, and one knowledge source
+ * per page, refreshed when the page changes.
  */
 export const syncAgent = internalAction({
   args: { projectId: v.id("projects") },
@@ -475,7 +501,18 @@ export const syncAgent = internalAction({
         await ctx.runMutation(internal.magicAgent.saveOriginalDetails, { projectId, details: original ?? { socials: {} } })
       }
       const { profile, facts } = companyProfile(content.site, original)
-      await call("mutation", "websites:setUp", { workspaceSlug: content.workspaceSlug, profile, facts, pages: content.pages }, token)
+      await call(
+        "mutation",
+        "websites:setUp",
+        {
+          workspaceSlug: content.workspaceSlug,
+          profile,
+          facts,
+          pages: content.pages,
+          welcomeMenu: { options: welcomeOptions(content.pages) },
+        },
+        token,
+      )
       await ctx.runMutation(internal.magicAgent.noteAgentSync, { projectId })
     } catch (error) {
       console.error("magicAgent.syncAgent failed:", error)
@@ -494,6 +531,25 @@ export const syncAgentNow = mutation({
     const project = await requireProject(ctx, projectId)
     if (project.magicAgent?.status !== "ready") throw new ConvexError("This site's Magic Agent workspace isn't ready yet.")
     await queueAgentSync(ctx, projectId)
+  },
+})
+
+/**
+ * Bring the site's chat widget leads over from Magic Agent, where the widget
+ * keeps them, so the Leads page lists them beside the form submissions. The
+ * page runs it when it opens. Returns how many there are, or null when the
+ * site has no workspace (or no live sign-in) to ask.
+ */
+export const syncChatLeads = action({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }): Promise<number | null> => {
+    const source = await ctx.runQuery(internal.leads.chatLeadSource, { projectId })
+    if (!source) return null
+    const token = await accessToken(source.sessionToken)
+    if (!token) return null
+    const leads = await call<ChatLead[]>("query", "websites:chatLeads", { workspaceSlug: source.workspaceSlug }, token)
+    await ctx.runMutation(internal.leads.saveChatLeads, { projectId, leads })
+    return leads.length
   },
 })
 

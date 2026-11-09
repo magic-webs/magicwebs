@@ -71,7 +71,13 @@ export async function handleUpload(request: Request, convex: ConvexHttpClient): 
     secretAccessKey: r2.secretAccessKey,
   })
   const key = `projects/${projectId}/uploads/${crypto.randomUUID()}.${TYPES[type]}`
-  await client.write(key, bytes, { type })
+  try {
+    await client.write(key, bytes, { type })
+  } catch (error) {
+    // Most often R2 keys without write access. Logged, so the cause is on the server.
+    console.error(`[assets ${projectId}] couldn't store ${name}:`, error instanceof Error ? error.message : error)
+    return Response.json({ error: "The file couldn't be stored. Try again later." }, { status: 502 })
+  }
   return Response.json({ url: `${r2.publicUrl}/${key}`, mediaType: type, filename: name, size: bytes.byteLength })
 }
 

@@ -12,7 +12,12 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 
-import s from "./onboarding.module.css"
+import { textBtn } from "./styles"
+
+const account = "flex flex-col gap-4"
+const accountHead = "flex flex-col gap-1"
+const accountTitle = "text-[20px] font-semibold tracking-[-0.03em]"
+const accountText = "text-mw-subtle text-[14px]"
 
 /**
  * Whether the visitor can make a site: signed in, with the Magic account each
@@ -52,7 +57,7 @@ export function AccountPanel({ returnTo, title, description }: { returnTo: strin
 
   if (loading) {
     return (
-      <div className={s.accountLoading}>
+      <div className="grid min-h-40 place-items-center">
         <Spinner className="size-5 text-muted-foreground" />
       </div>
     )
@@ -61,10 +66,10 @@ export function AccountPanel({ returnTo, title, description }: { returnTo: strin
   // Signed in with Google (or an old password) but without a Magic account yet.
   if (isAuthenticated && status?.required) {
     return (
-      <div className={s.account}>
-        <div className={s.accountHead}>
-          <h3>{status.reconnect ? "Sign in to your Magic account again" : "Connect your Magic account"}</h3>
-          <p>Each of your websites gets an AI agent that answers its visitors. It lives in your Magic account.</p>
+      <div className={account}>
+        <div className={accountHead}>
+          <h3 className={accountTitle}>{status.reconnect ? "Sign in to your Magic account again" : "Connect your Magic account"}</h3>
+          <p className={accountText}>Each of your websites gets an AI agent that answers its visitors. It lives in your Magic account.</p>
         </div>
         <MagicAccountForm
           flow={flow}
@@ -78,7 +83,7 @@ export function AccountPanel({ returnTo, title, description }: { returnTo: strin
             }
           }}
         />
-        <button type="button" className={s.textBtn} onClick={() => void signOut()}>
+        <button type="button" className={textBtn} onClick={() => void signOut()}>
           Use a different account
         </button>
       </div>
@@ -97,10 +102,10 @@ export function AccountPanel({ returnTo, title, description }: { returnTo: strin
   }
 
   return (
-    <div className={s.account}>
-      <div className={s.accountHead}>
-        <h3>{flow === "signIn" ? "Welcome back" : title}</h3>
-        <p>{flow === "signIn" ? "Sign in to your Magic account. You'll stay right here." : description}</p>
+    <div className={account}>
+      <div className={accountHead}>
+        <h3 className={accountTitle}>{flow === "signIn" ? "Welcome back" : title}</h3>
+        <p className={accountText}>{flow === "signIn" ? "Sign in to your Magic account. You'll stay right here." : description}</p>
       </div>
       <Button variant="outline" size="lg" onClick={onGoogle} disabled={google}>
         {google ? <Spinner /> : <GoogleIcon />}

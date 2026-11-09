@@ -3,10 +3,9 @@
 import gsap from "gsap"
 import { Bot, Code, Globe, MessageSquare, MousePointer2, Plug, Terminal, Wind, Zap, ChevronRight } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 
-import s from "./landing.module.css"
-import { GhostButton } from "./ui"
+import { DarkButtonLight, darkBtnBase, GhostButton, mw } from "./ui"
 
 const TITLE = "Any website, ready for your agent to edit"
 
@@ -31,37 +30,57 @@ export function prefersReducedMotion() {
 export const RISE_FROM = { opacity: 0, filter: "blur(10px)", yPercent: 20 }
 export const RISE_TO = { opacity: 1, filter: "blur(0px)", yPercent: 0, clearProps: "filter" }
 
+const NARROW_QUERY = "(max-width: 560px)"
+
+/** True on phone-width screens, where the full placeholder would be cut off. False while server rendering. */
+function useNarrow() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia(NARROW_QUERY)
+      mq.addEventListener("change", onChange)
+      return () => mq.removeEventListener("change", onChange)
+    },
+    () => window.matchMedia(NARROW_QUERY).matches,
+    () => false,
+  )
+}
+
 /** Where a visitor starts: their website's address, taken to the /start page to be checked and built. */
 function StartForm() {
   const router = useRouter()
   const [url, setUrl] = useState("")
+  const narrow = useNarrow()
   return (
     <form
-      className={s.startForm}
+      className="relative flex w-full max-w-[560px] items-center gap-2 rounded-[99px] bg-white py-[5px] pr-[5px] pl-[46px] shadow-[0_0_0_1px_#0000001a,0_2px_4px_#0000000a,0_24px_48px_-18px_#0000001f] transition-[box-shadow] duration-250 ease-mw-out focus-within:shadow-[0_0_0_2px_#18181b,0_2px_4px_#0000000a,0_24px_48px_-18px_#0000002e] max-[560px]:flex-col max-[560px]:items-stretch max-[560px]:gap-1.5 max-[560px]:rounded-[26px] max-[560px]:p-1.5"
       onSubmit={(e) => {
         e.preventDefault()
         const address = url.trim()
         router.push(address ? `/start?url=${encodeURIComponent(address)}` : "/start")
       }}
     >
-      <Globe className={s.startIcon} aria-hidden="true" />
+      <Globe
+        className="absolute left-[18px] size-[18px] text-mw-faint max-[560px]:top-[21px] max-[560px]:left-5"
+        aria-hidden="true"
+      />
       <input
-        className={s.startInput}
+        className="h-[42px] min-w-0 flex-1 bg-transparent text-[16px] font-medium tracking-[-0.01em] text-mw-fg placeholder:text-ellipsis placeholder:text-mw-faint focus-visible:outline-none! max-[560px]:h-12 max-[560px]:flex-none max-[560px]:pr-3 max-[560px]:pl-11 max-[560px]:text-ellipsis"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
-        placeholder="Enter your website, e.g. yourbusiness.com"
+        placeholder={narrow ? "e.g. yourbusiness.com" : "Enter your website, e.g. yourbusiness.com"}
         inputMode="url"
         autoComplete="url"
         autoCapitalize="none"
         spellCheck={false}
         aria-label="Your website's address"
       />
-      <button type="submit" className={s.darkBtn}>
-        <span className={s.lightMask} aria-hidden="true">
-          <span className={s.light} />
-        </span>
-        <span className={s.darkLabel}>Start free</span>
-        <ChevronRight className={s.chev} />
+      <button
+        type="submit"
+        className={`${darkBtnBase} h-10 min-w-0 flex-none pr-5 pl-6 max-[560px]:h-12 max-[560px]:rounded-[20px] max-[560px]:text-[15px]`}
+      >
+        <DarkButtonLight />
+        <span className={mw.darkLabel}>Start free</span>
+        <ChevronRight className={mw.chev} />
       </button>
     </form>
   )
@@ -176,58 +195,78 @@ export function Hero() {
   }, [])
 
   return (
-    <section ref={heroRef} className={s.hero}>
+    <section
+      ref={heroRef}
+      className="relative flex flex-col items-center gap-[120px] overflow-hidden pt-[168px] pb-24 font-mw max-[640px]:gap-14 max-[640px]:pt-28 max-[640px]:pb-[72px] [&:not([data-ready])_[data-hero-anim]]:invisible"
+    >
       <noscript>
         <style>{`[data-hero-anim]{visibility:visible!important}`}</style>
       </noscript>
-      <div className={s.heroBg} data-hero-bg data-hero-anim aria-hidden="true">
-        <div className={s.heroGrid} />
-        <div className={s.heroGlow} />
+      <div className="pointer-events-none absolute inset-0" data-hero-bg data-hero-anim aria-hidden="true">
+        <div className={mw.heroGrid} />
+        <div className="absolute top-[-260px] left-1/2 -ml-[550px] h-[640px] w-[1100px] rounded-full blur-[30px] [background:radial-gradient(closest-side_at_30%_55%,#ae0dff1f,transparent),radial-gradient(closest-side_at_70%_50%,#0dff9917,transparent),radial-gradient(closest-side_at_50%_70%,#ffdf0d14,transparent)]" />
       </div>
-      <canvas ref={canvasRef} className={`${s.trail} ${s.mono}`} aria-hidden="true" />
+      <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 size-full font-mw-mono" aria-hidden="true" />
 
-      <div className={s.heroMain}>
-        <a className={s.badgeRing} href="#setup" data-trail-safe data-hero-badge data-hero-anim>
-          <span className={s.badgeGlow} aria-hidden="true" />
-          <span className={s.badge}>
-            <Plug className={s.badgeIcon} />
+      <div className="relative flex w-full flex-col items-center gap-11 max-[640px]:gap-8">
+        <a
+          className="group relative isolate inline-flex overflow-hidden rounded-[999px] p-[1.5px]"
+          href="#setup" data-trail-safe data-hero-badge data-hero-anim>
+          <span
+            className="absolute top-1/2 left-1/2 z-[-1] aspect-square w-[calc(100%+40px)] -translate-1/2 animate-[mw-spin_6s_linear_infinite] blur-[6px] [background:conic-gradient(from_0deg,#ae0dff,#ffdf0d,#0dff99,#6d00ff,#ae0dff)]"
+            aria-hidden="true"
+          />
+          <span className="relative inline-flex h-7 items-center gap-1.5 rounded-[99px] bg-[#fafbfb] py-1 pr-1.5 pl-2 text-[14px] font-semibold tracking-[-0.01em] text-mw-fg shadow-mw-badge after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:border after:border-white [&_svg]:size-4">
+            <Plug className="text-mw-accent" />
             <span>Now with an MCP server</span>
-            <ChevronRight className={s.chev} />
+            <ChevronRight className={mw.chev} />
           </span>
         </a>
 
-        <div className={s.copy}>
-          <h1 ref={titleRef} className={s.title} data-trail-safe>
+        <div className="flex w-full flex-col items-center gap-[18px] text-center">
+          <h1 ref={titleRef} className="max-w-[880px] px-6 pt-[0.04em] pb-[0.16em] font-mw-title text-[length:clamp(36px,4.4vw_+_12px,68px)] leading-none font-bold tracking-[-0.04em] text-balance max-[640px]:px-4"
+            data-trail-safe>
             {TITLE.split(" ").map((word, i) => (
               <span key={i}>
-                <span className={s.word} data-hero-word data-hero-anim>
+                <span
+                  className="-mx-[0.1em] -mt-[0.1em] -mb-[0.25em] inline-block bg-[linear-gradient(130deg,#070120_33%,#545454_77%)] bg-clip-text bg-no-repeat px-[0.1em] pt-[0.1em] pb-[0.25em] [-webkit-text-fill-color:transparent] [background-position:var(--fx,0)_var(--fy,0)] [background-size:var(--fw,100%)_var(--fh,100%)]"
+                  data-hero-word data-hero-anim>
                   {word}
                 </span>{" "}
               </span>
             ))}
           </h1>
-          <p className={s.subtitle} data-trail-safe data-hero-sub data-hero-anim>
+          <p
+            className="w-[90%] max-w-[720px] text-[18px] leading-[1.35] font-medium tracking-[-0.02em] text-balance text-mw-subtle max-[640px]:w-auto max-[640px]:px-4 max-[640px]:text-[15px]"
+            data-trail-safe data-hero-sub data-hero-anim>
             Enter your website and Magicwebs gives it a fresh new look, or rebuilds it exactly with its CSS, fonts and
             animations. Edit it in the visual editor, with AI chat, or from any MCP client, then publish it to your own
             domain.
           </p>
         </div>
 
-        <div className={s.heroStart} data-trail-safe data-hero-actions data-hero-anim>
+        <div
+          className="flex w-full flex-col items-center gap-[14px] px-4 sm:px-6 max-[640px]:gap-2"
+          data-trail-safe data-hero-actions data-hero-anim>
           <StartForm />
-          <div className={s.heroActions}>
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
             <GhostButton href="#setup">Connect your agent</GhostButton>
           </div>
         </div>
       </div>
 
-      <div className={s.trusted}>
-        <p className={s.trustedLabel} data-hero-label data-hero-anim>
+      <div className="relative flex w-full max-w-[1000px] flex-col items-center gap-[22px] px-4 sm:px-6">
+        <p className="text-[15px] font-medium text-mw-muted" data-hero-label data-hero-anim>
           Works with every MCP client
         </p>
-        <ul className={s.logos} aria-label="MCP clients that work with Magicwebs" data-trail-safe>
+        <ul
+          className="flex list-none flex-wrap justify-center gap-x-9 gap-y-[14px] max-[640px]:gap-x-[22px] max-[640px]:gap-y-3"
+          aria-label="MCP clients that work with Magicwebs" data-trail-safe>
           {CLIENTS.map(({ name, Icon }) => (
-            <li key={name} className={s.logoItem} data-hero-logo data-hero-anim>
+            <li
+              key={name}
+              className="flex items-center gap-2 text-[17px] font-[650] tracking-[-0.03em] text-[#8b8b8b] transition-[color] duration-300 ease-mw-out hover:text-mw-strong max-[640px]:text-[15px] [&_svg]:size-5"
+              data-hero-logo data-hero-anim>
               <Icon />
               {name}
             </li>

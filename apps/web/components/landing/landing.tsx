@@ -9,10 +9,10 @@ import { useLayoutEffect, useRef } from "react"
 
 import { Footer } from "./footer"
 import { Hero, prefersReducedMotion } from "./hero"
-import s from "./landing.module.css"
 import { Nav } from "./nav"
 import { Replay } from "./replay"
 import { Faq, Prompts, Reasons, Setup } from "./sections"
+import { mw } from "./ui"
 
 export function Landing() {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -74,7 +74,7 @@ export function Landing() {
   }, [])
 
   return (
-    <div ref={rootRef} className={s.page}>
+    <div ref={rootRef} className={mw.page}>
       <a href="#main" className="sr-only focus:not-sr-only">
         Skip to content
       </a>

@@ -7,8 +7,22 @@ import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { CircleCheck, Lock } from "lucide-react"
 import { useCallback, useLayoutEffect, useRef } from "react"
 
-import s from "./landing.module.css"
 import { prefersReducedMotion } from "./hero"
+import { container, mw } from "./ui"
+
+/* Terminal text colours. */
+const MUTED = "text-[#8a8a8a]"
+const OK = "text-[#4ade80]"
+const MATCH = "text-[#c9b0ff] underline decoration-[#c9b0ff80] decoration-wavy underline-offset-3"
+const TOOL = "[&_b]:font-semibold [&_b]:text-white"
+
+const BAR = "block h-[7px] rounded-[4px] bg-[#ececec]"
+const PLAN_BAR_FEATURED = "block h-[7px] rounded-[4px] bg-[#ffffff40]"
+const RING = "animate-[mw-spin_0.8s_linear_infinite] rounded-full border-2"
+/** Accent-tinted parts of the mock site follow --site-accent, which the timeline animates. */
+const ACCENT_FADE = "transition-[background] duration-500 ease-[ease]"
+const ACCENT_I = "[&_i]:transition-[background] [&_i]:duration-500 [&_i]:ease-[ease]"
+const SITE_BTN = `inline-flex h-6 items-center rounded-[99px] bg-(--site-accent) px-3 text-[10px] font-semibold text-white ${ACCENT_FADE}`
 
 const REQUEST = 'Clone acme.com, make the hero say "Launch in a weekend", use our purple, then publish it'
 const OLD_TITLE = "Ship faster with Acme"
@@ -27,8 +41,8 @@ type Line = {
 function Tool({ name, args }: { name: string; args?: string }) {
   return (
     <>
-      <span className={s.dot}>●</span> <span className={s.muted}>magicwebs ·</span> <b>{name}</b>
-      <span className={s.muted}>({args})</span>
+      <span className={OK}>●</span> <span className={MUTED}>magicwebs ·</span> <b>{name}</b>
+      <span className={MUTED}>({args})</span>
     </>
   )
 }
@@ -36,7 +50,7 @@ function Tool({ name, args }: { name: string; args?: string }) {
 function Out({ children, first = true }: { children: React.ReactNode; first?: boolean }) {
   return (
     <>
-      <span className={s.muted}>{first ? "  └  " : "     "}</span>
+      <span className={MUTED}>{first ? "  └  " : "     "}</span>
       {children}
     </>
   )
@@ -46,32 +60,32 @@ const LINES: Line[] = [
   {
     key: "req",
     at: 0,
-    className: s.request,
+    className: "mb-1.5 rounded-[6px] bg-[#ffffff12] px-2 py-1",
     node: (
       <>
-        <span className={s.muted}>❯</span> {REQUEST}
+        <span className={MUTED}>❯</span> {REQUEST}
       </>
     ),
   },
-  { key: "t1", at: 0.6, className: s.tool, node: <Tool name="clone_landing_page" args='url: "https://acme.com"' /> },
+  { key: "t1", at: 0.6, className: TOOL, node: <Tool name="clone_landing_page" args='url: "https://acme.com"' /> },
   { key: "o1", at: 1.0, node: <Out>projectId: "k57x2a" · status: "cloning"</Out> },
-  { key: "t1b", at: 1.6, className: s.tool, node: <Tool name="list_projects" /> },
+  { key: "t1b", at: 1.6, className: TOOL, node: <Tool name="list_projects" /> },
   {
     key: "o1b",
     at: 2.2,
     effect: "clone",
     node: (
       <Out>
-        acme.com · <span className={s.ok}>ready</span> · 38 images · 4 fonts · 1,204 CSS rules
+        acme.com · <span className={OK}>ready</span> · 38 images · 4 fonts · 1,204 CSS rules
       </Out>
     ),
   },
-  { key: "t2", at: 2.7, className: s.tool, node: <Tool name="get_page_outline" /> },
+  { key: "t2", at: 2.7, className: TOOL, node: <Tool name="get_page_outline" /> },
   { key: "o2", at: 3.0, node: <Out>navbar · hero · logos · features · pricing · faq · footer</Out> },
   {
     key: "t3",
     at: 3.6,
-    className: s.tool,
+    className: TOOL,
     node: <Tool name="set_field" args={`sectionId: "s_hero1", path: "props.heading", value: "${NEW_TITLE}"`} />,
   },
   {
@@ -80,39 +94,39 @@ const LINES: Line[] = [
     effect: "edit",
     node: (
       <Out>
-        <span className={s.ok}>✓</span> Draft saved
+        <span className={OK}>✓</span> Draft saved
       </Out>
     ),
   },
-  { key: "t4", at: 4.6, className: s.tool, node: <Tool name="update_theme" args='colors: { primary: "#6d00ff" }' /> },
+  { key: "t4", at: 4.6, className: TOOL, node: <Tool name="update_theme" args='colors: { primary: "#6d00ff" }' /> },
   {
     key: "o4",
     at: 5.0,
     effect: "theme",
     node: (
       <Out>
-        <span className={s.ok}>✓</span> Draft saved · preview updated
+        <span className={OK}>✓</span> Draft saved · preview updated
       </Out>
     ),
   },
-  { key: "t5", at: 5.6, className: s.tool, node: <Tool name="publish_page" /> },
+  { key: "t5", at: 5.6, className: TOOL, node: <Tool name="publish_page" /> },
   {
     key: "o5",
     at: 6.2,
     effect: "publish",
     node: (
       <Out>
-        Live at <span className={s.match}>https://acme.magicwebs.ai</span> · version 1
+        Live at <span className={MATCH}>https://acme.magicwebs.ai</span> · version 1
       </Out>
     ),
   },
   {
     key: "said",
     at: 6.9,
-    className: s.said,
+    className: "mt-1.5",
     node: (
       <>
-        <span className={s.agentDot}>●</span> Cloned acme.com, rewrote the hero, switched the theme to your purple and
+        <span className="text-white">●</span> Cloned acme.com, rewrote the hero, switched the theme to your purple and
         published it.
       </>
     ),
@@ -248,114 +262,139 @@ export function Replay() {
   }
 
   return (
-    <div ref={shotRef} id="features" className={`${s.container} ${s.shot}`}>
-      <figure className={s.replay} data-replay>
-        <div className={s.stage}>
-          <div className={s.appWindow} aria-hidden="true">
-            <div className={s.appBar}>
-              <span className={s.lights}>
+    <div ref={shotRef} id="features" className={`${container} perspective-[1600px]`}>
+      <figure className="relative origin-[50%_0]" data-replay>
+        <div className="relative h-[600px] max-[860px]:flex max-[860px]:h-auto max-[860px]:flex-col max-[860px]:gap-4">
+          <div
+            className="absolute top-0 left-0 h-[540px] w-[74%] overflow-hidden rounded-[16px] bg-white shadow-mw-window max-[860px]:relative max-[860px]:h-[420px] max-[860px]:w-full"
+            aria-hidden="true"
+          >
+            <div className="flex h-10 items-center gap-3 border-b border-mw-line bg-mw-surface px-[14px]">
+              <span className="flex gap-1.5 [&_span]:size-2.5 [&_span]:rounded-full [&_span]:bg-[#e2e2e2]">
                 <span />
                 <span />
                 <span />
               </span>
-              <span className={s.address}>
+              <span className="mx-auto flex h-6 max-w-[320px] flex-1 items-center justify-center gap-1.5 rounded-[8px] bg-white text-[12px] text-mw-subtle shadow-mw-chip [&_svg]:size-3">
                 <Lock data-lock style={{ display: "none" }} />
-                <span className={s.liveDot} data-live />
+                <span className="size-[7px] rounded-full bg-[#22c55e] shadow-[0_0_0_3px_#22c55e33]" data-live />
                 <span data-address>acme.magicwebs.ai</span>
               </span>
               <span style={{ width: 42 }} />
             </div>
-            <div className={s.appBody}>
-              <div className={s.cloning} data-cloning style={{ display: "none" }}>
-                <span className={s.cloningInner}>
-                  <span className={s.ring} /> Copying acme.com…
+            <div className="relative h-[calc(100%-40px)] overflow-hidden">
+              <div className="absolute inset-0 grid place-items-center text-[13px] text-mw-faint" data-cloning style={{ display: "none" }}>
+                <span className="flex items-center gap-2">
+                  <span className={`${RING} size-[14px] border-[#0000001a] border-t-mw-accent`} /> Copying acme.com…
                 </span>
               </div>
-              <div className={s.site} data-site style={{ "--site-accent": "#6d00ff" } as React.CSSProperties}>
-                <div className={s.siteNav} data-site-part>
-                  <span className={s.siteLogo}>
+              <div
+                className="relative flex flex-col gap-[22px] px-7 py-4 [--site-accent:#111] max-[860px]:gap-4 max-[860px]:px-4 max-[860px]:py-[14px]"
+                data-site style={{ "--site-accent": "#6d00ff" } as React.CSSProperties}>
+                <div className="flex items-center gap-[18px]" data-site-part>
+                  <span
+                    className={`flex items-center gap-1.5 text-[13px] font-bold tracking-[-0.02em] [&_i]:size-[14px] [&_i]:rounded-[4px] [&_i]:bg-(--site-accent) ${ACCENT_I}`}
+                  >
                     <i />
                     Acme
                   </span>
-                  <span className={s.siteNavLinks}>
-                    <span className={s.bar} style={{ width: 36 }} />
-                    <span className={s.bar} style={{ width: 44 }} />
-                    <span className={s.bar} style={{ width: 30 }} />
+                  <span className="ml-auto flex gap-[14px]">
+                    <span className={BAR} style={{ width: 36 }} />
+                    <span className={BAR} style={{ width: 44 }} />
+                    <span className={BAR} style={{ width: 30 }} />
                   </span>
-                  <span className={s.siteBtn}>Sign up</span>
+                  <span className={SITE_BTN}>Sign up</span>
                 </div>
-                <div className={s.siteHero} data-site-part>
-                  <span className={s.siteTitle} data-site-title>
+                <div className="flex flex-col items-center gap-2.5 pt-[18px] pb-1 text-center" data-site-part>
+                  <span
+                    className="relative rounded-[6px] px-1.5 text-[30px] leading-[1.1] font-bold tracking-[-0.04em] data-edited:bg-[#6d00ff14] data-edited:shadow-[0_0_0_1.5px_#6d00ff] max-[860px]:text-[22px]"
+                    data-site-title
+                  >
                     {NEW_TITLE}
                   </span>
-                  <span className={s.bar} style={{ width: 280, maxWidth: "80%" }} />
-                  <span className={s.bar} style={{ width: 200, maxWidth: "60%" }} />
-                  <span className={s.siteBtn} style={{ marginTop: 6 }}>
+                  <span className={BAR} style={{ width: 280, maxWidth: "80%" }} />
+                  <span className={BAR} style={{ width: 200, maxWidth: "60%" }} />
+                  <span className={SITE_BTN} style={{ marginTop: 6 }}>
                     Get started
                   </span>
                 </div>
-                <div className={s.siteLogos} data-site-part>
+                <div className="flex justify-center gap-[22px]" data-site-part>
                   {[0, 1, 2, 3, 4].map((i) => (
-                    <span key={i} className={s.bar} />
+                    <span key={i} className="block h-[9px] w-[54px] rounded-[4px] bg-[#e3e3e3]" />
                   ))}
                 </div>
-                <div className={s.siteCards} data-site-part>
+                <div className="grid grid-cols-[repeat(3,1fr)] gap-3" data-site-part>
                   {[70, 55, 80].map((w, i) => (
-                    <div key={i} className={s.siteCard}>
+                    <div
+                      key={i}
+                      className={`flex flex-col gap-2 rounded-[12px] border border-mw-line p-[14px] [&_i]:size-[22px] [&_i]:rounded-[7px] [&_i]:bg-[color-mix(in_srgb,var(--site-accent)_14%,#fff)] ${ACCENT_I}`}
+                    >
                       <i />
-                      <span className={s.bar} style={{ width: `${w}%`, background: "#dcdcdc" }} />
-                      <span className={s.bar} style={{ width: "90%" }} />
-                      <span className={s.bar} style={{ width: "65%" }} />
+                      <span className={BAR} style={{ width: `${w}%`, background: "#dcdcdc" }} />
+                      <span className={BAR} style={{ width: "90%" }} />
+                      <span className={BAR} style={{ width: "65%" }} />
                     </div>
                   ))}
                 </div>
-                <div className={s.sitePricing} data-site-part>
+                <div className="grid grid-cols-[repeat(3,1fr)] gap-3 max-[860px]:hidden" data-site-part>
                   {["$0", "$29", "$99"].map((price, i) => (
-                    <div key={price} className={s.sitePlan} data-featured={i === 1 || undefined}>
+                    <div
+                      key={price}
+                      className={`flex flex-col gap-2 rounded-[12px] p-[14px] [&_b]:text-[18px] [&_b]:tracking-[-0.03em] ${i === 1 ? `bg-(--site-accent) text-white ${ACCENT_FADE}` : "bg-mw-sunk"}`}
+                      data-featured={i === 1 || undefined}
+                    >
                       <b>{price}</b>
-                      <span className={s.bar} style={{ width: "70%" }} />
-                      <span className={s.bar} style={{ width: "50%" }} />
+                      <span className={i === 1 ? PLAN_BAR_FEATURED : BAR} style={{ width: "70%" }} />
+                      <span className={i === 1 ? PLAN_BAR_FEATURED : BAR} style={{ width: "50%" }} />
                     </div>
                   ))}
                 </div>
               </div>
-              <div className={s.toast} data-toast>
+              <div
+                className="absolute right-4 bottom-4 flex items-center gap-2 rounded-[99px] bg-white py-2 pr-[14px] pl-2.5 text-[12px] font-semibold shadow-mw-window [&_svg]:size-4 [&_svg]:text-[#16a34a]"
+                data-toast
+              >
                 <CircleCheck /> Published · version 1
               </div>
             </div>
           </div>
 
-          <div className={s.terminal} aria-hidden="true">
-            <div className={s.titleBar}>
+          <div
+            className="absolute right-0 bottom-0 flex h-[430px] w-[52%] flex-col overflow-hidden rounded-[16px] bg-mw-dark text-mw-on-dark shadow-[0_2px_4px_#0000003d,0_7px_7px_#0003,0_17px_10px_#0000001f,0_30px_12px_#0000000a,inset_0_0_0_1px_#fff3] max-[860px]:relative max-[860px]:h-[400px] max-[860px]:w-full"
+            aria-hidden="true"
+          >
+            <div className="relative flex h-9 flex-none items-center gap-1.5 border-b border-[#ffffff12] px-[14px] [&>i]:size-2.5 [&>i]:rounded-full [&>i]:bg-[#ff5f57] [&>i:nth-child(2)]:bg-[#febc2e] [&>i:nth-child(3)]:bg-[#28c840]">
               <i />
               <i />
               <i />
-              <span className={`${s.titleText} ${s.mono}`}>~/acme-site · claude</span>
+              <span className={`absolute left-1/2 -translate-x-1/2 text-[12px] text-[#9a9a9a] ${mw.mono}`}>~/acme-site · claude</span>
             </div>
-            <div className={`${s.screen} ${s.mono}`}>
-              <div className={s.screenLines}>
+            <div
+              className={`flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden px-4 pt-[14px] pb-3 text-[12px] leading-[18px] ${mw.mono}`}
+            >
+              <div className="flex min-h-0 flex-1 flex-col justify-end gap-0.5 overflow-hidden">
                 {LINES.map((line) => (
-                  <p key={line.key} className={`${s.line} ${line.className ?? ""}`} data-line={line.key}>
+                  <p key={line.key} className={`whitespace-pre-wrap wrap-anywhere ${line.className ?? ""}`} data-line={line.key}>
                     {line.node}
                   </p>
                 ))}
-                <p className={s.working} data-working style={{ display: "none" }}>
-                  <span className={s.ring} /> Working…
+                <p className="flex items-center gap-2 text-[#c9b0ff]" data-working style={{ display: "none" }}>
+                  <span className={`${RING} size-2.5 border-[#ffffff26] border-t-[#c9b0ff]`} /> Working…
                 </p>
               </div>
-              <div className={s.input}>
-                <span className={s.muted}>❯</span>
+              <div className="mt-2.5 flex min-h-[34px] flex-none items-center gap-2 rounded-[8px] border border-[#ffffff1f] px-2.5 py-[7px]">
+                <span className={MUTED}>❯</span>
                 <span>
                   <span data-typed />
-                  <span className={s.caret} />
+                  <span className="ml-px inline-block h-[15px] w-[7px] animate-[mw-blink_1s_steps(1)_infinite] bg-[#e5e5e5] align-[-3px]" />
                 </span>
               </div>
             </div>
           </div>
         </div>
-        <figcaption className={s.caption} data-caption>
+        <figcaption className="mt-5 text-center text-[13px] text-mw-subtle" data-caption>
           One prompt in Claude Code · 6 calls to the Magicwebs MCP server
-          <button type="button" className={s.replayBtn} onClick={replay}>
+          <button type="button" className="ml-2 text-mw-link underline underline-offset-2" onClick={replay}>
             Replay
           </button>
         </figcaption>

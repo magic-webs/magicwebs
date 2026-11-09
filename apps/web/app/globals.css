@@ -128,3 +128,77 @@
     @apply font-sans;
     }
 }
+/* ---------- Marketing pages (landing + /start) ----------
+   Tokens for the white, purple-accented look. Raw values live on :root as --mw-*,
+   so a page can override one with an arbitrary property, e.g. [--mw-accent:#18181b]. */
+
+@theme inline {
+  --color-mw-bg: var(--mw-bg);
+  --color-mw-surface: var(--mw-surface);
+  --color-mw-sunk: var(--mw-sunk);
+  --color-mw-dark: var(--mw-dark);
+  --color-mw-fg: var(--mw-fg);
+  --color-mw-strong: var(--mw-strong);
+  --color-mw-muted: var(--mw-muted);
+  --color-mw-subtle: var(--mw-subtle);
+  --color-mw-faint: var(--mw-faint);
+  --color-mw-on-dark: var(--mw-on-dark);
+  --color-mw-line: var(--mw-line);
+  --color-mw-accent: var(--mw-accent);
+  --color-mw-link: var(--mw-link);
+
+  --shadow-mw-chip: 0 0 0 1px #0000000a, 0 1px 2px #0000001a;
+  --shadow-mw-badge: 0 1px 1px -0.5px #0000000f, 0 2px 2px -1px #0000000f, 0 3px 3px -1.5px #0000000f, 0 0 4px #00000008;
+  --shadow-mw-window: 0 0 0 1px #0000000d, 0 2px 4px #0000000a, 0 12px 24px -6px #00000014, 0 40px 80px -20px #0000001f;
+  --shadow-mw-dark-drop: 0 2px 4px #0000003d, 0 7px 7px #0003, 0 17px 10px #0000001f, 0 30px 12px #0000000a;
+  --shadow-mw-btn-dark: inset 0 1px #ffffff3d, inset 0 0 0 1px #ffffff29, 0 12px 12px -6px #0000000a,
+    0 6px 6px -3px #00000014, 0 3px 3px -1.5px #0000001f, 0 1px 1px -0.5px #00000029;
+
+  --ease-mw-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-mw-spring: cubic-bezier(0.19, 0.74, 0.05, 1);
+  --ease-mw-soft: cubic-bezier(0.3, 0.66, 0, 1.18);
+
+  --font-mw: var(--font-geist), var(--font-sans);
+  --font-mw-title: var(--font-manrope), var(--font-geist), var(--font-sans);
+  --font-mw-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+:root {
+  --mw-bg: #fff;
+  --mw-surface: #fafafa;
+  --mw-sunk: #f4f4f5;
+  --mw-dark: #1c1c1c;
+  --mw-fg: #000;
+  --mw-strong: #222;
+  --mw-muted: #595959;
+  --mw-subtle: #707070;
+  --mw-faint: #8a8a8a;
+  --mw-on-dark: #f2f2f2;
+  --mw-line: #e7e7e7;
+  --mw-accent: #6d00ff;
+  --mw-link: #006fb9;
+}
+
+/* Keyframes for the marketing pages, used as animate-[mw-spin_3s_linear_infinite] and the like.
+   Plain rules rather than @theme so they ship even when only arbitrary animate-[…] values use them. */
+@keyframes mw-spin { to { rotate: 360deg; } }
+@keyframes mw-blink { 50% { opacity: 0; } }
+@keyframes mw-menu { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes mw-shimmer { to { background-position: -200% 0; } }
+@keyframes mw-glow { to { filter: brightness(1.35) saturate(1.2); } }
+@keyframes mw-burst {
+  0% { transform: scale(1); opacity: 1; filter: brightness(1.6); }
+  100% { transform: scale(0.2) rotate(35deg); opacity: 0; }
+}
+@keyframes mw-toast {
+  0% { opacity: 0; transform: translateY(12px) scale(0.9); }
+  20% { opacity: 1; transform: translateY(0) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-18px); }
+}
+@keyframes mw-fade { from { opacity: 0; } }
+@keyframes mw-pop { from { opacity: 0; transform: translateY(-6px) scale(0.98); } }
+@keyframes mw-rise { from { opacity: 0; transform: translateY(14px); filter: blur(6px); } }
+@keyframes mw-breathe { 50% { opacity: 0.45; } }
+@keyframes mw-pulse { to { box-shadow: 0 0 0 10px #18181b00; } }
+@keyframes mw-badge { from { transform: scale(0.4); opacity: 0; } }

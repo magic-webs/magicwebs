@@ -13,14 +13,13 @@ import { getTemplate, MAX_SITE_PAGES, type TemplateId } from "@magicwebs/page-sc
 import { errorText, useProjectDefaults } from "@/components/dashboard/lib"
 import { PagePicker } from "@/components/dashboard/page-picker"
 import { TemplatePicker } from "@/components/dashboard/template-picker"
-import l from "@/components/landing/landing.module.css"
 import { AccountChip, AccountLoading } from "@/components/landing/account-chip"
-import { Logo } from "@/components/landing/ui"
+import { Logo, mw } from "@/components/landing/ui"
 import { cn } from "@/lib/utils"
 
 import { AccountPanel, useAccountReady } from "./account-panel"
 import { BuildView } from "./build-view"
-import s from "./onboarding.module.css"
+import { card, error as errorClass, intro, lead, mutedSmall, narrow, narrowCardPad, spin } from "./styles"
 
 type Mode = "copy" | "revamp"
 type DiscoveredSite = FunctionReturnType<typeof api.pages.discover>
@@ -59,13 +58,85 @@ function savePlan(plan: Plan | null) {
 
 const STEPS = ["Your site", "Confirm", "Choose", "Build"] as const
 
+// ---------- Classes ----------
+
+const hoverTint = "hover:bg-[#8080801f]"
+const h2 =
+  "text-[length:clamp(24px,min(2.6vw_+_14px,4.6dvh),42px)] font-semibold tracking-[-0.04em] leading-[1.08] text-balance"
+
+/** One choice card. The radiogroup (`group/modes`) carries data-picked, the card (`group/mode`) aria-checked. */
+const modeCard = cn(
+  "group/mode relative flex flex-col gap-[clamp(4px,0.8dvh,8px)] rounded-[24px] bg-white shadow-mw-window text-left",
+  "pt-[clamp(12px,2.2dvh,20px)] pr-[22px] pb-[clamp(12px,2.4dvh,22px)] pl-[22px]",
+  "transition-[box-shadow,transform] duration-[250ms] ease-mw-out hover:[transform:translateY(-2px)]",
+  "aria-checked:shadow-[0_0_0_2px_var(--mw-accent),0_24px_48px_-20px_#00000026]",
+  "[@media(max-width:640px)]:pt-3 [@media(max-width:640px)]:pr-3.5 [@media(max-width:640px)]:pb-3.5 [@media(max-width:640px)]:pl-3.5",
+  // Once a choice is made the cards become one line (icon, title, check) to leave room for the lists.
+  "group-data-[picked]/modes:flex-row group-data-[picked]/modes:items-center group-data-[picked]/modes:gap-3 group-data-[picked]/modes:rounded-[16px]",
+  "group-data-[picked]/modes:pt-2.5 group-data-[picked]/modes:pr-3.5 group-data-[picked]/modes:pb-2.5 group-data-[picked]/modes:pl-2.5",
+)
+const modeTop = "flex items-center gap-2 mb-[clamp(0px,0.6dvh,6px)] group-data-[picked]/modes:contents"
+const modeIcon = cn(
+  "grid size-10 place-items-center rounded-[12px] bg-mw-sunk text-mw-accent [&_svg]:size-5",
+  "[@media(max-width:640px)]:size-8 [@media(max-width:640px)]:rounded-[10px]",
+  "group-data-[picked]/modes:size-[34px] group-data-[picked]/modes:rounded-[10px] group-data-[picked]/modes:[&_svg]:size-[17px]",
+)
+const modeTag = "rounded-full px-[9px] py-0.5 bg-[#fff6db] text-[#8a5a00] text-[12px] font-semibold"
+const modeCheck = cn(
+  "grid size-[22px] place-items-center ml-auto rounded-full shadow-[inset_0_0_0_1.5px_var(--mw-line)] text-transparent",
+  "transition-all duration-200 ease-mw-out [&_svg]:size-[13px]",
+  "group-aria-checked/mode:bg-mw-accent group-aria-checked/mode:shadow-none group-aria-checked/mode:text-white",
+  "group-data-[picked]/modes:order-2",
+)
+const modeTitle = cn(
+  "text-[19px] font-semibold tracking-[-0.03em] [@media(max-width:640px)]:text-[16px]",
+  "group-data-[picked]/modes:order-1 group-data-[picked]/modes:text-[16px]",
+)
+// On short or narrow screens the cards keep just their titles, side by side.
+const modeBody =
+  "text-mw-subtle text-[14px] leading-[1.45] [@media(max-height:760px),(max-width:640px)]:hidden group-data-[picked]/modes:hidden"
+
+/** A fold-out list on the Choose step: open, it shares the height left over; closed, it's just its one-line header. */
+const panel = cn(
+  "flex min-h-0 flex-col gap-[clamp(8px,1.4dvh,14px)] rounded-[24px] p-[clamp(12px,2dvh,20px)] bg-[#ffffffd9] shadow-mw-chip",
+  "animate-[mw-rise_0.45s_var(--ease-mw-out)]",
+  "data-[open]:min-h-[150px] data-[open]:flex-[1_1_0] [&:not([data-open])]:py-3",
+)
+/** One line: title, then what's chosen, then the chevron. */
+const panelToggle = "flex items-center justify-between gap-3 text-left"
+const panelToggleText = "flex min-w-0 items-baseline gap-2.5"
+const panelToggleTitle = "text-[16px] font-semibold tracking-[-0.02em]"
+const panelChevron =
+  "size-[18px] flex-none text-mw-subtle transition-[rotate] duration-200 ease-mw-out data-[open]:rotate-180"
+
 function Stepper({ current }: { current: number }) {
   return (
-    <ol className={s.stepper} aria-label="Progress">
+    <ol
+      className="flex flex-none items-center gap-1.5 rounded-full p-[5px] bg-[#ffffffcc] shadow-mw-badge text-[13px] font-[550]"
+      aria-label="Progress"
+    >
       {STEPS.map((label, i) => (
-        <li key={label} data-state={i < current ? "done" : i === current ? "active" : "todo"} aria-current={i === current ? "step" : undefined}>
-          <span className={s.stepDot}>{i < current ? <Check /> : i + 1}</span>
-          <span className={s.stepLabel}>{label}</span>
+        <li
+          key={label}
+          className={cn(
+            "group/step flex items-center gap-[7px] rounded-full py-1 pr-3 pl-[5px] text-mw-faint",
+            "transition-[background-color,color] duration-300 ease-mw-out",
+            "data-[state=active]:bg-[#1c1c1c] data-[state=active]:text-white data-[state=done]:text-mw-strong",
+            "[@media(max-width:560px)]:[&:not([data-state=active])]:pr-[5px]",
+          )}
+          data-state={i < current ? "done" : i === current ? "active" : "todo"}
+          aria-current={i === current ? "step" : undefined}
+        >
+          <span
+            className={cn(
+              "grid size-[22px] place-items-center rounded-full bg-mw-sunk text-[12px] tabular-nums [&_svg]:size-[13px]",
+              "group-data-[state=active]/step:bg-white group-data-[state=active]/step:text-[#18181b]",
+              "group-data-[state=done]/step:bg-[#18181b12] group-data-[state=done]/step:text-mw-accent",
+            )}
+          >
+            {i < current ? <Check /> : i + 1}
+          </span>
+          <span className="[@media(max-width:560px)]:group-[:not([data-state=active])]/step:hidden">{label}</span>
         </li>
       ))}
     </ol>
@@ -78,9 +149,17 @@ function PrimaryButton({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean }) {
   return (
-    <button {...props} className={cn(l.darkBtn, s.bigBtn, props.className)} disabled={props.disabled || busy}>
-      <span className={l.darkLabel}>{children}</span>
-      {busy ? <Loader2 className={cn(l.chev, s.spin)} /> : <ArrowRight className={l.chev} />}
+    <button
+      {...props}
+      className={cn(
+        mw.darkBtn,
+        "h-12 min-w-0 flex-none pl-[26px] pr-[22px] text-[15px] disabled:cursor-not-allowed disabled:opacity-55",
+        props.className,
+      )}
+      disabled={props.disabled || busy}
+    >
+      <span className={mw.darkLabel}>{children}</span>
+      {busy ? <Loader2 className={cn(mw.chev, spin)} /> : <ArrowRight className={mw.chev} />}
     </button>
   )
 }
@@ -105,22 +184,52 @@ function Header({ returnTo }: { returnTo: string }) {
   }, [open])
 
   return (
-    <header className={s.header}>
+    <header
+      className={cn(
+        "relative z-20 flex flex-none items-center justify-between gap-3 py-[clamp(8px,1.6dvh,14px)] px-4 sm:px-6",
+        "bg-[#ffffffb3] backdrop-blur-[14px] backdrop-saturate-[1.4] shadow-[0_1px_0_#0000000d]",
+      )}
+    >
       <Logo />
-      <div className={s.headerRight} ref={panelRef}>
+      <div className="relative flex items-center gap-1" ref={panelRef}>
         {loading ? (
           <AccountLoading />
         ) : isAuthenticated ? (
           <AccountChip />
         ) : (
-          <button type="button" className={s.headerLink} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          <button
+            type="button"
+            className={cn(
+              "inline-flex h-[34px] items-center gap-1.5 rounded-full px-3.5 text-mw-strong text-[14px] font-medium",
+              "transition-[background-color] duration-200 ease-mw-out [&_svg]:size-4",
+              hoverTint,
+            )}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+          >
             Log in
           </button>
         )}
         {/* Signing in hides the panel and leaves the visitor where they were. */}
         {open && !ready && (
-          <div className={s.loginPop} role="dialog" aria-label="Log in">
-            <button type="button" className={s.popClose} onClick={() => setOpen(false)} aria-label="Close">
+          <div
+            className={cn(
+              "absolute top-[calc(100%+10px)] right-0 w-[min(380px,calc(100vw-32px))] sm:w-[min(380px,calc(100vw-48px))]",
+              "max-h-[calc(100svh-90px)] overflow-y-auto rounded-[24px] p-[22px] bg-white shadow-mw-window",
+              "animate-[mw-pop_0.25s_var(--ease-mw-out)] motion-reduce:animate-none",
+            )}
+            role="dialog"
+            aria-label="Log in"
+          >
+            <button
+              type="button"
+              className={cn(
+                "absolute top-3 right-3 grid size-7 place-items-center rounded-full text-mw-subtle [&_svg]:size-4",
+                hoverTint,
+              )}
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+            >
               <X />
             </button>
             <AccountPanel
@@ -236,9 +345,9 @@ export function Onboarding({ initialUrl, projectId: initialProject }: { initialU
   } else if (plan.pending && !ready) {
     step = 2
     body = (
-      <div className={s.narrow}>
+      <div className={narrow}>
         <BackLink onClick={() => update({ pending: false })}>Back</BackLink>
-        <div className={s.card}>
+        <div className={cn(card, narrowCardPad)}>
           <AccountPanel
             returnTo={returnTo}
             title="Save your site to an account"
@@ -269,14 +378,25 @@ export function Onboarding({ initialUrl, projectId: initialProject }: { initialU
   }
 
   return (
-    <div className={cn(l.page, "light", s.root)}>
-      <div className={s.bg} aria-hidden="true">
-        <div className={l.heroGrid} />
+    // Exactly one screen tall: each step sizes its content to the viewport instead of scrolling the page.
+    // The accent is neutral ink here, not the landing page's purple.
+    <div className={cn(mw.page, "light", "relative flex h-dvh min-h-0 flex-col overflow-hidden font-mw [--mw-accent:#18181b]")}>
+      <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
+        <div className={mw.heroGrid} />
       </div>
       <Header returnTo={returnTo} />
-      <main className={s.main}>
+      {/* Scrolls only when a step can't fit, e.g. a tiny screen or the sign-up form. */}
+      <main
+        className={cn(
+          "relative z-[1] mx-auto flex w-full max-w-[1212px] sm:max-w-[1228px] min-h-0 flex-1 flex-col items-center gap-[clamp(12px,3dvh,32px)] overflow-y-auto",
+          "pt-[clamp(12px,2.6dvh,32px)] pb-[clamp(12px,2.6dvh,28px)] px-4 sm:px-6",
+        )}
+      >
         {!projectId && <Stepper current={step} />}
-        <div key={step} className={s.stage}>
+        <div
+          key={step}
+          className="flex w-full min-h-0 flex-1 justify-center animate-[mw-rise_0.6s_var(--ease-mw-out)] motion-reduce:animate-none"
+        >
           {body}
         </div>
       </main>
@@ -286,7 +406,14 @@ export function Onboarding({ initialUrl, projectId: initialProject }: { initialU
 
 function BackLink({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" className={s.back} onClick={onClick}>
+    <button
+      type="button"
+      className={cn(
+        "inline-flex items-center gap-1.5 self-start rounded-full py-1.5 pr-3 pl-2 text-mw-muted text-[14px] font-medium [&_svg]:size-4",
+        hoverTint,
+      )}
+      onClick={onClick}
+    >
       <ArrowLeft />
       {children}
     </button>
@@ -307,27 +434,39 @@ function EnterStep({
   onSubmit: (url: string) => void
 }) {
   return (
-    <div className={s.enter}>
-      <div className={s.intro}>
-        <span className={s.kicker}>
+    // Just below the steps, with room that grows a little on tall screens.
+    <div className="flex w-full max-w-[720px] flex-col items-center gap-[clamp(18px,4dvh,32px)] mt-[clamp(8px,7dvh,88px)] mb-auto">
+      <div className={intro}>
+        <span className="inline-flex items-center gap-1.5 rounded-full py-1 pr-3 pl-2.5 bg-[#fafbfb] shadow-mw-badge text-[13px] font-semibold [&_svg]:size-[15px] [&_svg]:text-mw-accent">
           <Sparkles /> Revamp it or rebuild it exactly
         </span>
-        <h1 className={s.h1}>What&apos;s your website?</h1>
-        <p className={s.lead}>
+        <h1 className="max-w-[760px] bg-[linear-gradient(130deg,#070120_33%,#545454_77%)] bg-clip-text text-[length:clamp(32px,min(5vw_+_12px,8dvh),68px)] font-semibold tracking-[-0.045em] leading-[1.02] text-balance [-webkit-text-fill-color:transparent]">
+          What&apos;s your website?
+        </h1>
+        <p className={lead}>
           Enter its address. We&apos;ll find it, then give it a fresh new look or rebuild it exactly, ready for you to
           edit and publish.
         </p>
       </div>
       <form
-        className={s.urlForm}
+        className={cn(
+          "relative flex w-full max-w-[620px] items-center gap-2 rounded-full py-1.5 pr-1.5 pl-[50px] bg-white",
+          "shadow-[0_0_0_1px_#0000001a,0_2px_4px_#0000000a,0_24px_48px_-18px_#0000001f] transition-shadow duration-[250ms] ease-mw-out",
+          "focus-within:shadow-[0_0_0_2px_var(--mw-accent),0_2px_4px_#0000000a,0_24px_48px_-18px_#0000002e]",
+          "[@media(max-width:520px)]:flex-col [@media(max-width:520px)]:items-stretch [@media(max-width:520px)]:gap-1.5 [@media(max-width:520px)]:rounded-[26px] [@media(max-width:520px)]:p-1.5",
+        )}
         onSubmit={(e) => {
           e.preventDefault()
           onSubmit(url)
         }}
       >
-        <Globe className={s.urlIcon} aria-hidden="true" />
+        <Globe className="absolute left-5 size-5 text-mw-faint [@media(max-width:520px)]:top-5" aria-hidden="true" />
         <input
-          className={s.urlInput}
+          className={cn(
+            "min-w-0 h-12 flex-1 bg-transparent text-mw-fg text-[17px] font-medium tracking-[-0.01em] outline-none focus-visible:outline-none! placeholder:text-mw-faint",
+            // flex: 1 in a column would override the height and squash the input.
+            "[@media(max-width:520px)]:flex-none [@media(max-width:520px)]:ps-11 [@media(max-width:520px)]:pe-3 [@media(max-width:520px)]:text-ellipsis",
+          )}
           value={url}
           onChange={(e) => onUrl(e.target.value)}
           placeholder="yourbusiness.com"
@@ -343,9 +482,13 @@ function EnterStep({
           {checking ? "Finding it…" : "Continue"}
         </PrimaryButton>
       </form>
-      {checking && <p className={s.checking}>Looking up {url.trim()} and its pages…</p>}
+      {checking && (
+        <p className="text-mw-subtle text-[14px] animate-[mw-breathe_1.6s_ease-in-out_infinite]">
+          Looking up {url.trim()} and its pages…
+        </p>
+      )}
       {error && (
-        <p role="alert" className={s.error}>
+        <p role="alert" className={errorClass}>
           {error}
         </p>
       )}
@@ -353,25 +496,29 @@ function EnterStep({
   )
 }
 
+/** The preview takes the height the screen leaves, up to a 1.91:1 banner, and shrinks first when the screen is short. */
+const sitePreview = "block w-full h-[293px] min-h-24 flex-[0_1_293px] object-cover bg-mw-sunk"
+const favicon = "size-9 flex-none rounded-[10px] p-1.5 bg-mw-sunk object-contain text-mw-faint"
+
 function ConfirmStep({ site, onConfirm, onReject }: { site: DiscoveredSite; onConfirm: () => void; onReject: () => void }) {
   const hostname = new URL(site.url).hostname
   const [imageOk, setImageOk] = useState(true)
   const [imageFit, setImageFit] = useState<"cover" | "contain">("cover")
   const [iconOk, setIconOk] = useState(true)
   return (
-    <div className={s.narrow}>
-      <div className={s.intro}>
-        <h1 className={s.h2}>Is this your website?</h1>
-        <p className={s.lead}>Here&apos;s what we found. Make sure it&apos;s the right one before we start.</p>
+    <div className={narrow}>
+      <div className={intro}>
+        <h1 className={h2}>Is this your website?</h1>
+        <p className={lead}>Here&apos;s what we found. Make sure it&apos;s the right one before we start.</p>
       </div>
-      <div className={s.siteCard}>
+      <div className="flex min-h-0 flex-[0_1_auto] flex-col overflow-hidden rounded-[24px] bg-white shadow-mw-window">
         {/* The live site when it allows framing (a preview image is often just a logo), else its image. */}
         {site.frameable ? (
           <LivePreview url={site.url} />
         ) : site.image && imageOk ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            className={s.siteImage}
+            className={cn(sitePreview, "data-[fit=contain]:p-7 data-[fit=contain]:object-contain data-[fit=contain]:bg-mw-surface")}
             data-fit={imageFit}
             src={site.image}
             alt=""
@@ -380,33 +527,33 @@ function ConfirmStep({ site, onConfirm, onReject }: { site: DiscoveredSite; onCo
             onLoad={(e) => setImageFit(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight < 1.5 ? "contain" : "cover")}
           />
         ) : (
-          <div className={s.siteImageEmpty} aria-hidden="true">
+          <div className={cn(sitePreview, "grid place-items-center bg-mw-surface text-mw-faint [&_svg]:size-10")} aria-hidden="true">
             <Globe />
           </div>
         )}
-        <div className={s.siteInfo}>
-          <div className={s.siteTitleRow}>
+        <div className="flex flex-col gap-[clamp(6px,1.4dvh,12px)] pt-[clamp(12px,2.2dvh,20px)] px-[22px] pb-[clamp(14px,2.4dvh,22px)]">
+          <div className="flex items-center gap-3">
             {iconOk ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img className={s.favicon} src={site.icon} alt="" onError={() => setIconOk(false)} />
+              <img className={favicon} src={site.icon} alt="" onError={() => setIconOk(false)} />
             ) : (
-              <Globe className={s.favicon} />
+              <Globe className={favicon} />
             )}
-            <div className={s.siteNames}>
-              <p className={s.siteTitle}>{site.title}</p>
-              <a href={site.url} target="_blank" rel="noreferrer" className={`${s.siteHost} ${l.mono}`}>
+            <div className="min-w-0">
+              <p className="truncate text-[17px] font-semibold tracking-[-0.02em]">{site.title}</p>
+              <a href={site.url} target="_blank" rel="noreferrer" className={cn("text-mw-link text-[13px]", mw.mono)}>
                 {hostname}
               </a>
             </div>
           </div>
-          {site.description && <p className={s.siteDesc}>{site.description}</p>}
-          <p className={s.sitePages}>
+          {site.description && <p className="line-clamp-3 text-mw-muted text-[14px] leading-[1.5]">{site.description}</p>}
+          <p className="inline-flex items-center gap-1.5 text-[#0a7d55] text-[13px] font-[550] [&_svg]:size-[15px]">
             <Check /> {site.pages.length === 1 ? "1 page found" : `${site.pages.length} pages found`}
           </p>
         </div>
       </div>
-      <div className={s.actionsRow}>
-        <button type="button" className={l.ghostBtn} onClick={onReject}>
+      <div className="flex flex-none flex-wrap-reverse items-center justify-end gap-2 [@media(max-width:520px)]:*:w-full">
+        <button type="button" className={mw.ghostBtn} onClick={onReject}>
           No, try another address
         </button>
         <PrimaryButton type="button" onClick={onConfirm} autoFocus>
@@ -440,7 +587,11 @@ function LivePreview({ url }: { url: string }) {
   const { scale } = size
 
   return (
-    <div ref={boxRef} className={s.livePreview} data-loaded={loaded || undefined}>
+    <div
+      ref={boxRef}
+      className={cn(sitePreview, "group/live relative overflow-hidden border-b border-mw-line")}
+      data-loaded={loaded || undefined}
+    >
       <iframe
         title="Your website"
         src={url}
@@ -448,12 +599,13 @@ function LivePreview({ url }: { url: string }) {
         referrerPolicy="no-referrer"
         tabIndex={-1}
         aria-hidden="true"
+        className="absolute top-0 left-0 border-0 bg-white pointer-events-none opacity-0 origin-top-left transition-opacity duration-[400ms] ease-[ease] group-data-loaded/live:opacity-100"
         onLoad={() => setLoaded(true)}
         style={{ width: PREVIEW_WIDTH, height: size.height / scale, transform: `scale(${scale})` }}
       />
       {!loaded && (
-        <div className={s.liveLoading} aria-hidden="true">
-          <Loader2 className={s.spin} />
+        <div className="absolute inset-0 grid place-items-center text-mw-faint [&_svg]:size-[22px]" aria-hidden="true">
+          <Loader2 className={spin} />
         </div>
       )}
     </div>
@@ -498,51 +650,58 @@ function ChooseStep({
   const template = plan.template ? getTemplate(plan.template) : undefined
 
   return (
-    <div className={s.choose}>
+    <div className="flex w-full max-w-[820px] min-h-0 flex-col gap-[clamp(10px,2.2dvh,24px)] *:flex-none">
       <BackLink onClick={onBack}>{hostname}</BackLink>
-      <div className={s.intro}>
-        <h1 className={s.h2}>What should we do with it?</h1>
-        <p className={`${s.lead} ${s.chooseLead}`}>You can change your mind later. Every page stays fully editable.</p>
+      <div className={intro}>
+        <h1 className={h2}>What should we do with it?</h1>
+        <p className={cn(lead, "[@media(max-height:820px)]:hidden")}>
+          You can change your mind later. Every page stays fully editable.
+        </p>
       </div>
 
-      <div className={s.modes} role="radiogroup" aria-label="What to make" data-picked={plan.mode ? "" : undefined}>
+      <div
+        className="group/modes grid grid-cols-[repeat(2,1fr)] gap-3.5 [@media(max-width:640px)]:gap-2.5"
+        role="radiogroup"
+        aria-label="What to make"
+        data-picked={plan.mode ? "" : undefined}
+      >
         {MODES.map(({ value, title, body, Icon, tag }) => (
           <button
             key={value}
             type="button"
             role="radio"
             aria-checked={plan.mode === value}
-            className={s.mode}
+            className={modeCard}
             onClick={() => onChange({ mode: value })}
           >
-            <span className={s.modeTop}>
-              <span className={s.modeIcon}>
+            <span className={modeTop}>
+              <span className={modeIcon}>
                 <Icon />
               </span>
-              {tag && <span className={s.modeTag}>{tag}</span>}
-              <span className={s.modeCheck} aria-hidden="true">
+              {tag && <span className={modeTag}>{tag}</span>}
+              <span className={modeCheck} aria-hidden="true">
                 <Check />
               </span>
             </span>
-            <span className={s.modeTitle}>{title}</span>
-            <span className={s.modeBody}>{body}</span>
+            <span className={modeTitle}>{title}</span>
+            <span className={modeBody}>{body}</span>
           </button>
         ))}
       </div>
 
       {plan.mode === "revamp" && (
         // Folds to one line while the page list is open, so each list gets the room it needs.
-        <section className={`${s.panel} ${s.stylePanel}`} data-open={!showPages || undefined}>
-          <button type="button" className={s.panelToggle} aria-expanded={!showPages} onClick={() => setShowPages(false)}>
-            <span>
-              <strong>Choose a style</strong>
-              <span className={s.mutedSmall}>{template ? template.name : "None picked yet"}</span>
+        <section className={panel} data-open={!showPages || undefined}>
+          <button type="button" className={panelToggle} aria-expanded={!showPages} onClick={() => setShowPages(false)}>
+            <span className={panelToggleText}>
+              <strong className={panelToggleTitle}>Choose a style</strong>
+              <span className={cn(mutedSmall, "truncate")}>{template ? template.name : "None picked yet"}</span>
             </span>
-            <ChevronDown data-open={!showPages || undefined} />
+            <ChevronDown className={panelChevron} data-open={!showPages || undefined} />
           </button>
           {!showPages && (
             <TemplatePicker
-              className={`max-h-none ${s.panelScroll}`}
+              className="max-h-none min-h-0 flex-1"
               value={plan.template}
               onChange={(t) => onChange({ template: t })}
             />
@@ -551,17 +710,21 @@ function ChooseStep({
       )}
 
       {plan.mode && site.pages.length > 1 && (
-        <section className={`${s.panel} ${s.pagesPanel}`} data-open={showPages || undefined}>
-          <button type="button" className={s.panelToggle} aria-expanded={showPages} onClick={() => setShowPages((v) => !v)}>
-            <span>
-              <strong>Pages</strong>
+        <section
+          // The picker fills the panel, and its list drops its own fixed height to scroll in what's left.
+          className={cn(panel, "[&>:last-child]:min-h-0 [&>:last-child]:flex-1 [&_ul]:max-h-none [&_ul]:min-h-0 [&_ul]:flex-1")}
+          data-open={showPages || undefined}
+        >
+          <button type="button" className={panelToggle} aria-expanded={showPages} onClick={() => setShowPages((v) => !v)}>
+            <span className={panelToggleText}>
+              <strong className={panelToggleTitle}>Pages</strong>
               {!showPages && (
-                <span className={s.mutedSmall}>
+                <span className={cn(mutedSmall, "truncate")}>
                   {count === 1 ? "Home page only" : `${count} pages`} · {site.pages.length} found
                 </span>
               )}
             </span>
-            <ChevronDown data-open={showPages || undefined} />
+            <ChevronDown className={panelChevron} data-open={showPages || undefined} />
           </button>
           {showPages && (
             <PagePicker
@@ -576,14 +739,21 @@ function ChooseStep({
       )}
 
       {error && (
-        <p role="alert" className={s.error}>
+        <p role="alert" className={errorClass}>
           {error}
         </p>
       )}
 
       {plan.mode && (
-        <div className={s.startBar}>
-          <p className={s.mutedSmall}>
+        <div
+          className={cn(
+            "relative z-[5] flex flex-wrap items-center justify-between gap-3 rounded-full py-2 pr-2 pl-[22px]",
+            "bg-[#ffffffe6] backdrop-blur-[14px] backdrop-saturate-[1.4]",
+            "shadow-[inset_0_0_0_1px_#fff6,0_0_0_0.5px_#00000029,0_21px_36px_-14px_#00000026]",
+            "[@media(max-width:560px)]:rounded-[24px] [@media(max-width:560px)]:p-3 [@media(max-width:560px)]:[&>button]:w-full",
+          )}
+        >
+          <p className={mutedSmall}>
             {plan.mode === "revamp"
               ? template
                 ? `Revamp ${hostname} in the ${template.name} style`

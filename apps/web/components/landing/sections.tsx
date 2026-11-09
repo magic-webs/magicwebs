@@ -29,11 +29,22 @@ import {
 } from "lucide-react"
 import { useLayoutEffect, useRef } from "react"
 
-import s from "./landing.module.css"
 import { prefersReducedMotion } from "./hero"
-import { Snippet } from "./ui"
+import { container, mw, Snippet } from "./ui"
 
 const MCP_URL = "https://api.magicwebs.ai/mcp"
+
+const SECTION = `${container} mt-36 scroll-mt-[110px] max-[860px]:mt-24`
+const INTRO = "mb-10 flex max-w-[680px] flex-col items-start gap-3"
+const HEADING =
+  "bg-[linear-gradient(117deg,#07001f_0%,#000000b3_100%)] bg-clip-text text-[length:clamp(32px,4vw_+_8px,48px)] leading-[1.15] font-semibold tracking-[-0.03em] text-transparent"
+const LEAD =
+  "text-[20px] leading-[28px] font-medium tracking-[-0.015em] text-balance text-mw-muted max-[860px]:text-[18px] max-[860px]:leading-[26px]"
+
+/* Terminal text colours. */
+const MUTED = "text-[#8a8a8a]"
+const OK = "text-[#4ade80]"
+const MATCH = "text-[#c9b0ff] underline decoration-[#c9b0ff80] decoration-wavy underline-offset-3"
 
 /* ---------- Ask for anything ---------- */
 
@@ -48,22 +59,31 @@ const PROMPTS = [
 
 export function Prompts() {
   return (
-    <section className={`${s.section} ${s.afterShot} ${s.container}`} aria-labelledby="prompts-title">
-      <header className={s.intro} data-reveal>
-        <h2 id="prompts-title" className={s.heading}>
+    <section
+      className={`${container} mt-[104px] scroll-mt-[110px] max-[860px]:mt-[72px]`}
+      aria-labelledby="prompts-title"
+    >
+      <header className={INTRO} data-reveal>
+        <h2 id="prompts-title" className={HEADING}>
           Ask for what you need
         </h2>
-        <p className={s.lead}>
+        <p className={LEAD}>
           Describe the change in plain words. Your agent turns it into edits on the page. A few requests people make:
         </p>
       </header>
-      <ul className={s.prompts} data-reveal-list>
+      <ul className="grid list-none grid-cols-2 gap-x-12 max-[860px]:grid-cols-1" data-reveal-list>
         {PROMPTS.map(({ text, icons }) => (
-          <li key={text} className={s.prompt}>
-            <p className={s.promptText}>{text}</p>
-            <span className={s.promptIcons} aria-hidden="true">
+          <li
+            key={text}
+            className="group flex min-h-16 items-center justify-between gap-6 border-t border-mw-line py-[14px] transition-[padding] duration-400 ease-mw-out last:border-b hover:px-2 min-[860px]:[&:nth-last-child(2)]:border-b"
+          >
+            <p className="text-[16px] font-medium text-mw-strong">{text}</p>
+            <span className="flex flex-none gap-3 text-mw-strong" aria-hidden="true">
               {icons.map((Icon, i) => (
-                <Icon key={i} />
+                <Icon
+                  key={i}
+                  className="size-5 [transition:color_0.3s,scale_0.4s_cubic-bezier(0.3,0.66,0,1.18)] group-hover:scale-[1.12] group-hover:text-mw-accent"
+                />
               ))}
             </span>
           </li>
@@ -92,9 +112,9 @@ const CLI = `claude mcp add --transport http magicwebs ${MCP_URL} --header "Auth
 /** Colours the JSON config: keys, strings and punctuation. */
 function highlight(json: string) {
   return json.split(/("(?:[^"\\]|\\.)*"\s*:?)/g).map((part, i) => {
-    if (!part.startsWith('"')) return <span key={i} className={s["tok-dim"]}>{part}</span>
+    if (!part.startsWith('"')) return <span key={i} className="text-[#8a8a8a]">{part}</span>
     return (
-      <span key={i} className={part.trimEnd().endsWith(":") ? s["tok-key"] : s["tok-str"]}>
+      <span key={i} className={part.trimEnd().endsWith(":") ? "text-[#c9b0ff]" : "text-[#86efac]"}>
         {part}
       </span>
     )
@@ -110,42 +130,47 @@ const CLIENT_FILES = [
 
 export function Setup() {
   return (
-    <section id="setup" className={`${s.section} ${s.container}`} aria-labelledby="setup-title">
-      <header className={s.intro} data-reveal>
-        <span className={s.eyebrow}>MCP server</span>
-        <h2 id="setup-title" className={s.heading}>
+    <section id="setup" className={SECTION} aria-labelledby="setup-title">
+      <header className={INTRO} data-reveal>
+        <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-mw-accent uppercase">
+          MCP server
+        </span>
+        <h2 id="setup-title" className={HEADING}>
           Connect it with one paste
         </h2>
-        <p className={s.lead}>
+        <p className={LEAD}>
           Add Magicwebs to your MCP client and your agent can clone, edit, publish and roll back pages in any project.
         </p>
       </header>
-      <div className={s.setupGrid}>
+      <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-x-12 gap-y-6 max-[860px]:grid-cols-1">
         <div data-reveal>
           <Snippet text={CONFIG} multiline>
             {highlight(CONFIG)}
           </Snippet>
         </div>
-        <div className={s.setupSide} data-reveal>
-          <div className={s.setupStep}>
-            <p className={s.label}>Or add it from your terminal</p>
+        <div className="flex flex-col gap-7" data-reveal>
+          <div className="flex flex-col gap-3">
+            <p className="text-[14px] font-medium text-mw-muted">Or add it from your terminal</p>
             <Snippet text={CLI} />
           </div>
-          <div className={s.setupStep}>
-            <p className={s.label}>Where each client keeps the config</p>
-            <ul className={s.files}>
+          <div className="flex flex-col gap-3">
+            <p className="text-[14px] font-medium text-mw-muted">Where each client keeps the config</p>
+            <ul className="flex list-none flex-col">
               {CLIENT_FILES.map(({ name, Icon, file }) => (
-                <li key={name} className={s.file}>
-                  <span className={s.fileAgent}>
+                <li
+                  key={name}
+                  className="flex items-center justify-between gap-4 border-t border-mw-line py-2.5 last:border-b"
+                >
+                  <span className="flex flex-none items-center gap-2 text-[14px] font-medium text-mw-strong [&_svg]:size-4 [&_svg]:text-mw-subtle">
                     <Icon />
                     {name}
                   </span>
-                  <code className={s.mono}>{file}</code>
+                  <code className={`min-w-0 text-right text-[13px] wrap-anywhere text-mw-muted ${mw.mono}`}>{file}</code>
                 </li>
               ))}
             </ul>
           </div>
-          <p className={s.smallCaption}>
+          <p className="text-[13px] leading-[18px] text-mw-subtle [&_a]:text-mw-link [&_a]:underline [&_a]:underline-offset-2">
             Your API key lives in an environment variable, never in the prompt. Prefer clicking?{" "}
             <a href="/dashboard">Everything works in the visual editor too.</a>
           </p>
@@ -162,7 +187,7 @@ type VLine = { node: React.ReactNode; tone?: "request" | "tool" | "out"; focus?:
 function Req({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <span className={s.muted}>❯</span> {children}
+      <span className={MUTED}>❯</span> {children}
     </>
   )
 }
@@ -170,7 +195,7 @@ function Req({ children }: { children: React.ReactNode }) {
 function Call({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <span className={s.dot}>●</span> <b style={{ color: "#fff" }}>{children}</b>
+      <span className={OK}>●</span> <b style={{ color: "#fff" }}>{children}</b>
     </>
   )
 }
@@ -178,7 +203,7 @@ function Call({ children }: { children: React.ReactNode }) {
 function Res({ children, first = true }: { children: React.ReactNode; first?: boolean }) {
   return (
     <>
-      <span className={s.muted}>{first ? "  └  " : "     "}</span>
+      <span className={MUTED}>{first ? "  └  " : "     "}</span>
       {children}
     </>
   )
@@ -210,7 +235,7 @@ const REASONS: { title: string; body: string; chip: string; ChipIcon: typeof Zap
       {
         node: (
           <Res>
-            <span className={s.err}>error</span> No section with id "s_hero9"
+            <span className="text-[#f87171]">error</span> No section with id "s_hero9"
           </Res>
         ),
         focus: true,
@@ -220,7 +245,7 @@ const REASONS: { title: string; body: string; chip: string; ChipIcon: typeof Zap
       {
         node: (
           <Res>
-            <span className={s.ok}>✓</span> Draft saved
+            <span className={OK}>✓</span> Draft saved
           </Res>
         ),
       },
@@ -237,7 +262,7 @@ const REASONS: { title: string; body: string; chip: string; ChipIcon: typeof Zap
       {
         node: (
           <Res>
-            <span className={s.ok}>✓</span> saved in 41ms · preview updated
+            <span className={OK}>✓</span> saved in 41ms · preview updated
           </Res>
         ),
         focus: true,
@@ -246,7 +271,7 @@ const REASONS: { title: string; body: string; chip: string; ChipIcon: typeof Zap
       {
         node: (
           <Res>
-            <span className={s.ok}>✓</span> saved in 37ms · preview updated
+            <span className={OK}>✓</span> saved in 37ms · preview updated
           </Res>
         ),
         focus: true,
@@ -266,7 +291,7 @@ const REASONS: { title: string; body: string; chip: string; ChipIcon: typeof Zap
       {
         node: (
           <Res>
-            <span className={s.ok}>✓</span> v3 is live at <span className={s.match}>acme.magicwebs.ai</span>
+            <span className={OK}>✓</span> v3 is live at <span className={MATCH}>acme.magicwebs.ai</span>
           </Res>
         ),
         focus: true,
@@ -286,7 +311,7 @@ const REASONS: { title: string; body: string; chip: string; ChipIcon: typeof Zap
       {
         node: (
           <Res>
-            <span className={s.ok}>✓</span> <span className={s.match}>https://launch.acme.com</span> is active
+            <span className={OK}>✓</span> <span className={MATCH}>https://launch.acme.com</span> is active
           </Res>
         ),
         focus: true,
@@ -306,7 +331,7 @@ const REASONS: { title: string; body: string; chip: string; ChipIcon: typeof Zap
       {
         node: (
           <Res>
-            <span className={s.ok}>✓</span> ready to edit
+            <span className={OK}>✓</span> ready to edit
           </Res>
         ),
       },
@@ -344,20 +369,25 @@ function Vignette({ lines, chip, ChipIcon }: { lines: VLine[]; chip: string; Chi
   }, [])
 
   return (
-    <div ref={ref} className={s.scene} aria-hidden="true">
-      <div className={s.vWindow}>
-        <div className={s.vBar}>
+    <div ref={ref} className="flex w-full justify-center px-7 pt-7 max-[860px]:px-4 max-[860px]:pt-5" aria-hidden="true">
+      <div className="flex w-full max-w-[440px] flex-col rounded-t-[12px] bg-mw-dark text-mw-on-dark shadow-[0_0_0_1px_#0000000f,0_16px_32px_-12px_#0000003d,inset_0_0_0_1px_#ffffff1f]">
+        <div className="flex gap-[5px] px-3 py-2.5 [&_span]:size-2 [&_span]:rounded-full [&_span]:bg-[#ffffff26]">
           <span />
           <span />
           <span />
         </div>
-        <div className={`${s.vScreen} ${s.mono}`}>
+        <div
+          className={`relative flex flex-col gap-[3px] px-[14px] pb-[18px] text-[11.5px] leading-[17px] max-[860px]:pb-[52px] ${mw.mono}`}
+        >
           {lines.map((line, i) => (
-            <p key={i} className={s.vLine} data-vline data-vfocus={line.focus || undefined}>
+            <p key={i} className="-mx-1 rounded-[4px] px-1 whitespace-pre-wrap" data-vline data-vfocus={line.focus || undefined}>
               {line.node}
             </p>
           ))}
-          <span className={s.chip} data-vchip>
+          <span
+            className="absolute right-3 bottom-3 inline-flex items-center gap-1.5 rounded-[99px] bg-white py-1 pr-2.5 pl-2 font-sans text-[12px] font-semibold text-mw-strong shadow-[0_0_0_1px_#0000000f,0_6px_16px_-4px_#00000040] [&_svg]:size-[14px] [&_svg]:text-mw-accent"
+            data-vchip
+          >
             <ChipIcon />
             {chip}
           </span>
@@ -369,25 +399,31 @@ function Vignette({ lines, chip, ChipIcon }: { lines: VLine[]; chip: string; Chi
 
 export function Reasons() {
   return (
-    <section id="safety" className={`${s.section} ${s.container}`} aria-labelledby="why-title">
-      <header className={s.intro} data-reveal>
-        <h2 id="why-title" className={s.heading}>
+    <section id="safety" className={SECTION} aria-labelledby="why-title">
+      <header className={INTRO} data-reveal>
+        <h2 id="why-title" className={HEADING}>
           Safe to hand to your agent
         </h2>
-        <p className={s.lead}>
+        <p className={LEAD}>
           Your agent gets exact pages, clear errors and instant feedback, while every published version stays one call
           away.
         </p>
       </header>
-      <ul className={s.reasons} data-reveal>
+      <ul
+        className="grid list-none grid-cols-2 overflow-hidden rounded-[24px] border border-mw-line max-[860px]:grid-cols-1"
+        data-reveal
+      >
         {REASONS.map(({ title, body, chip, ChipIcon, lines }) => (
-          <li key={title} className={s.reason}>
-            <div className={s.vignetteStage}>
+          <li
+            key={title}
+            className="row-span-2 grid grid-rows-subgrid gap-y-6 border-mw-line p-(--pad) [--pad:32px] max-[860px]:[--pad:20px] [&:not(:nth-last-child(-n+2))]:border-b min-[860px]:odd:border-r max-[860px]:[&:nth-last-child(2)]:border-b"
+          >
+            <div className="-mx-(--pad) -mt-(--pad) flex min-h-[244px] overflow-hidden border-b border-mw-line bg-mw-sunk max-[860px]:min-h-0">
               <Vignette lines={lines} chip={chip} ChipIcon={ChipIcon} />
             </div>
-            <div className={s.reasonText}>
-              <h3 className={s.reasonTitle}>{title}</h3>
-              <p className={s.body}>{body}</p>
+            <div className="flex flex-col gap-1.5">
+              <h3 className="text-[16px] font-semibold text-mw-strong">{title}</h3>
+              <p className="text-[16px] leading-6 text-pretty text-mw-muted">{body}</p>
             </div>
           </li>
         ))}
@@ -427,18 +463,23 @@ const FAQS = [
 
 export function Faq() {
   return (
-    <section id="faq" className={`${s.section} ${s.faq} ${s.container}`} aria-labelledby="faq-title">
-      <h2 id="faq-title" className={`${s.heading} ${s.center}`} data-reveal>
+    <section id="faq" className={`${SECTION} flex flex-col items-center gap-12`} aria-labelledby="faq-title">
+      <h2 id="faq-title" className={`${HEADING} text-center`} data-reveal>
         Questions about Magicwebs
       </h2>
-      <div className={s.faqList} data-reveal-list>
+      <div className="flex w-full max-w-[715px] flex-col gap-1 [interpolate-size:allow-keywords]" data-reveal-list>
         {FAQS.map(({ q, a }) => (
-          <details key={q} className={s.faqItem}>
-            <summary className={s.faqQ}>
-              <span>{q}</span>
-              <ChevronDown />
+          <details
+            key={q}
+            className="group/faq rounded-[16px] px-[18px] py-[14px] transition-[background-color] duration-200 ease-mw-out open:bg-[#f2f2f2] hover:bg-[#f2f2f2] [&::details-content]:overflow-clip [&::details-content]:[block-size:0] [&::details-content]:[transition:block-size_0.45s_cubic-bezier(0.19,0.74,0.05,1),content-visibility_0.45s_allow-discrete] open:[&::details-content]:[block-size:auto]"
+          >
+            <summary className="-mx-[18px] -my-[14px] flex cursor-pointer list-none items-start gap-4 px-[18px] py-[14px] text-[19px] leading-[1.3] font-medium tracking-[-0.01em] text-black [&::-webkit-details-marker]:hidden">
+              <span className="flex-1">{q}</span>
+              <ChevronDown className="mt-0.5 size-5 flex-none transition-[rotate] duration-[450ms] ease-mw-spring group-open/faq:rotate-180" />
             </summary>
-            <p className={s.faqA}>{a}</p>
+            <p className="translate-y-6 pt-[14px] text-[16px] leading-[1.6] font-medium text-[#666c76] opacity-0 transition-[opacity,translate] duration-[450ms] ease-mw-spring group-open/faq:translate-none group-open/faq:opacity-100">
+              {a}
+            </p>
           </details>
         ))}
       </div>

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Geist } from "next/font/google"
+import { Geist, Manrope } from "next/font/google"
 
 import { Landing } from "@/components/landing/landing"
 
@@ -11,10 +11,12 @@ export const metadata: Metadata = {
 
 // The hero's typeface; the rest of the landing page uses the app's Inter.
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" })
+// The hero headline's typeface.
+const manrope = Manrope({ subsets: ["latin"], weight: ["700"], variable: "--font-manrope" })
 
 export default function Home() {
   return (
-    <div className={geist.variable}>
+    <div className={`${geist.variable} ${manrope.variable}`}>
       <Landing />
     </div>
   )

@@ -31,7 +31,7 @@ const NOT_A_PAGE =
 const SKIPPED_PATHS =
   /^\/(wp-admin|wp-login|wp-json|feed|login|log-in|signin|sign-in|signup|sign-up|logout|register|account|my-account|cart|checkout|basket|admin|cdn-cgi)(\/|$)/i
 
-async function fetchText(url: string, accept: string): Promise<{ text: string; finalUrl: string } | null> {
+async function fetchText(url: string, accept: string): Promise<{ text: string; finalUrl: string; headers: Headers } | null> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
@@ -42,7 +42,7 @@ async function fetchText(url: string, accept: string): Promise<{ text: string; f
     })
     if (!res.ok) return null
     const text = (await res.text()).slice(0, MAX_HTML_CHARS)
-    return { text, finalUrl: res.url || url }
+    return { text, finalUrl: res.url || url, headers: res.headers }
   } catch {
     return null
   } finally {
@@ -124,15 +124,72 @@ async function sitemapUrls(site: URL): Promise<string[]> {
   return urls
 }
 
+/** A `<meta>` tag's content, by its name or property (e.g. "description", "og:image"). */
+function metaContent(html: string, key: string): string | undefined {
+  for (const match of html.matchAll(/<meta\b[^>]*>/gi)) {
+    const tag = match[0]
+    if ((attr(tag, "name") ?? attr(tag, "property"))?.toLowerCase() === key) return attr(tag, "content")?.trim() || undefined
+  }
+  return undefined
+}
+
+/** An absolute http(s) URL for a link or image on the page, or undefined. */
+function absoluteUrl(href: string | undefined, base: URL): string | undefined {
+  if (!href) return undefined
+  try {
+    const url = new URL(href, base)
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The page's icon: the first `<link rel="icon">` it declares, else /favicon.ico. */
+function iconOf(html: string, base: URL): string {
+  for (const match of html.matchAll(/<link\b[^>]*>/gi)) {
+    const rel = attr(match[0], "rel")?.toLowerCase() ?? ""
+    if (/(^|\s)(icon|apple-touch-icon)(\s|$)/.test(rel)) {
+      const href = absoluteUrl(attr(match[0], "href"), base)
+      if (href) return href
+    }
+  }
+  return new URL("/favicon.ico", base.origin).href
+}
+
+/**
+ * Whether the page lets other sites show it in a frame: no X-Frame-Options and
+ * no Content-Security-Policy frame-ancestors that would stop it.
+ */
+function allowsFraming(headers: Headers): boolean {
+  if (headers.get("x-frame-options")) return false
+  const csp = headers.get("content-security-policy") ?? ""
+  const ancestors = csp.match(/frame-ancestors\s+([^;]*)/i)?.[1]?.trim()
+  return !ancestors || ancestors.split(/\s+/).includes("*")
+}
+
+export type DiscoveredSite = {
+  url: string
+  title: string
+  /** What the site says about itself, its preview image and icon, to show people before they start. */
+  description?: string
+  image?: string
+  icon: string
+  /** The home page can be shown in an iframe, for a live preview when there's no image. */
+  frameable: boolean
+  pages: DiscoveredPage[]
+}
+
 /**
  * Find the pages of the site a URL belongs to: the page itself first, then
  * the pages it links to in the order they appear (menus come first), then
  * pages only listed in the sitemap.
+ *
+ * Open to visitors who haven't signed in, so they can check it's their site
+ * before making an account (see the /start page). It only reads public pages.
  */
 export const discover = action({
   args: { url: v.string() },
-  handler: async (ctx, args): Promise<{ url: string; title: string; pages: DiscoveredPage[] }> => {
-    if (!(await ctx.auth.getUserIdentity())) throw new ConvexError("Sign in to continue")
+  handler: async (_ctx, args): Promise<DiscoveredSite> => {
     let entered: URL
     try {
       entered = new URL(/^https?:\/\//i.test(args.url) ? args.url : `https://${args.url}`)
@@ -179,7 +236,15 @@ export const discover = action({
     // The entered page is the home page of the clone, whatever its path.
     const entry = pages.get(pagePath(homeUrl))!
     entry.title = "Home"
-    return { url: homeUrl.href, title: pageTitle, pages: [...pages.values()] }
+    return {
+      url: homeUrl.href,
+      title: pageTitle,
+      description: cleanText(metaContent(home.text, "description") ?? metaContent(home.text, "og:description") ?? "") || undefined,
+      image: absoluteUrl(metaContent(home.text, "og:image") ?? metaContent(home.text, "twitter:image"), base),
+      icon: iconOf(home.text, base),
+      frameable: allowsFraming(home.headers),
+      pages: [...pages.values()],
+    }
   },
 })
 

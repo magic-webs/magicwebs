@@ -1,11 +1,12 @@
 "use client"
 
 import gsap from "gsap"
-import { Bot, Code, MessageSquare, MousePointer2, Plug, Terminal, Wind, Zap, ChevronRight } from "lucide-react"
-import { useEffect, useLayoutEffect, useRef } from "react"
+import { Bot, Code, Globe, MessageSquare, MousePointer2, Plug, Terminal, Wind, Zap, ChevronRight } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import s from "./landing.module.css"
-import { DarkButton, GhostButton } from "./ui"
+import { GhostButton } from "./ui"
 
 const TITLE = "Any website, ready for your agent to edit"
 
@@ -29,6 +30,42 @@ export function prefersReducedMotion() {
 /** Blur-and-rise entrance shared by the hero and the section reveals. */
 export const RISE_FROM = { opacity: 0, filter: "blur(10px)", yPercent: 20 }
 export const RISE_TO = { opacity: 1, filter: "blur(0px)", yPercent: 0, clearProps: "filter" }
+
+/** Where a visitor starts: their website's address, taken to the /start page to be checked and built. */
+function StartForm() {
+  const router = useRouter()
+  const [url, setUrl] = useState("")
+  return (
+    <form
+      className={s.startForm}
+      onSubmit={(e) => {
+        e.preventDefault()
+        const address = url.trim()
+        router.push(address ? `/start?url=${encodeURIComponent(address)}` : "/start")
+      }}
+    >
+      <Globe className={s.startIcon} aria-hidden="true" />
+      <input
+        className={s.startInput}
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder="Enter your website, e.g. yourbusiness.com"
+        inputMode="url"
+        autoComplete="url"
+        autoCapitalize="none"
+        spellCheck={false}
+        aria-label="Your website's address"
+      />
+      <button type="submit" className={s.darkBtn}>
+        <span className={s.lightMask} aria-hidden="true">
+          <span className={s.light} />
+        </span>
+        <span className={s.darkLabel}>Start free</span>
+        <ChevronRight className={s.chev} />
+      </button>
+    </form>
+  )
+}
 
 export function Hero() {
   const heroRef = useRef<HTMLElement>(null)
@@ -170,14 +207,17 @@ export function Hero() {
             ))}
           </h1>
           <p className={s.subtitle} data-trail-safe data-hero-sub data-hero-anim>
-            Paste a URL and Magicwebs rebuilds the page exactly, with its CSS, fonts and animations. Edit it in the
-            visual editor, with AI chat, or from any MCP client, then publish it to your own domain.
+            Enter your website and Magicwebs gives it a fresh new look, or rebuilds it exactly with its CSS, fonts and
+            animations. Edit it in the visual editor, with AI chat, or from any MCP client, then publish it to your own
+            domain.
           </p>
         </div>
 
-        <div className={s.heroActions} data-trail-safe data-hero-actions data-hero-anim>
-          <GhostButton href="#setup">Connect your agent</GhostButton>
-          <DarkButton href="/dashboard">Start building</DarkButton>
+        <div className={s.heroStart} data-trail-safe data-hero-actions data-hero-anim>
+          <StartForm />
+          <div className={s.heroActions}>
+            <GhostButton href="#setup">Connect your agent</GhostButton>
+          </div>
         </div>
       </div>
 

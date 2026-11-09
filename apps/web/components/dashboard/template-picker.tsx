@@ -133,16 +133,18 @@ export function TemplatePicker({
   value,
   onChange,
   disabled,
+  className,
 }: {
   value: TemplateId | null
   onChange: (template: TemplateId) => void
   disabled?: boolean
+  className?: string
 }) {
   return (
     <div
       role="radiogroup"
       aria-label="Style"
-      className="grid max-h-[55vh] auto-rows-max grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2"
+      className={cn("grid max-h-[55vh] auto-rows-max grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2", className)}
     >
       {DESIGN_TEMPLATES.map((template) => {
         const selected = value === template.id

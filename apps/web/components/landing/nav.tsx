@@ -1,8 +1,10 @@
 "use client"
 
+import { useConvexAuth } from "convex/react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 
+import { AccountChip, AccountLoading } from "./account-chip"
 import s from "./landing.module.css"
 import { DarkButton, Logo } from "./ui"
 
@@ -16,6 +18,7 @@ const LINKS = [
 export function Nav() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
+  const { isLoading, isAuthenticated } = useConvexAuth()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24)
@@ -58,13 +61,19 @@ export function Nav() {
               </li>
             ))}
             <li>
-              <Link className={`${s.navLink} ${s.navSecondary}`} href="/dashboard">
-                Log in
-              </Link>
+              {isLoading ? (
+                <AccountLoading />
+              ) : isAuthenticated ? (
+                <AccountChip />
+              ) : (
+                <Link className={`${s.navLink} ${s.navSecondary}`} href="/start">
+                  Log in
+                </Link>
+              )}
             </li>
           </ul>
           <div className={s.actions}>
-            <DarkButton href="/dashboard" small>
+            <DarkButton href="/start" small>
               Start building
             </DarkButton>
           </div>

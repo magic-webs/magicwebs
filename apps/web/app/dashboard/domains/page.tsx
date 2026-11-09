@@ -55,7 +55,10 @@ function CopyValue({ value }: { value: string }) {
 function AddDomain() {
   const projects = useQuery(api.projects.list)
   const add = useMutation(api.domains.addCustom)
-  const [projectId, setProjectId] = useState<Id<"projects"> | null>(null)
+  // Coming from a site's "Connect your domain" (?project=…), that site is already chosen.
+  const [projectId, setProjectId] = useState<Id<"projects"> | null>(
+    () => new URLSearchParams(window.location.search).get("project") as Id<"projects"> | null,
+  )
   const [hostname, setHostname] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

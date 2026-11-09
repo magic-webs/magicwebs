@@ -517,11 +517,12 @@
 }
 
 .title {
-  max-width: 1000px;
+  max-width: 880px;
   padding: 0.04em 24px 0.16em;
-  font-size: clamp(42px, 6.4vw + 14px, 92px);
-  font-weight: 600;
-  letter-spacing: -0.045em;
+  font-family: var(--font-manrope), var(--font-geist), var(--font-sans);
+  font-size: clamp(36px, 4.4vw + 12px, 68px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
   line-height: 1;
   text-wrap: balance;
 }
@@ -556,6 +557,88 @@
   align-items: center;
   justify-content: center;
   gap: 8px 12px;
+}
+
+.heroStart {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding-inline: var(--gutter);
+}
+
+.startForm {
+  position: relative;
+  display: flex;
+  width: 100%;
+  max-width: 560px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 99px;
+  padding: 5px 5px 5px 46px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px #0000001a,
+    0 2px 4px #0000000a,
+    0 24px 48px -18px #0000001f;
+  transition: box-shadow 0.25s var(--ease-out);
+}
+
+.startForm:focus-within {
+  box-shadow:
+    0 0 0 2px #18181b,
+    0 2px 4px #0000000a,
+    0 24px 48px -18px #0000002e;
+}
+
+.startIcon {
+  position: absolute;
+  left: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--fg-faint);
+}
+
+.startInput {
+  min-width: 0;
+  height: 42px;
+  flex: 1;
+  background: transparent;
+  color: var(--fg);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.startForm .startInput:focus-visible {
+  outline: none;
+}
+
+.startInput::placeholder {
+  color: var(--fg-faint);
+}
+
+.startForm .darkBtn {
+  min-width: 0;
+  flex: none;
+}
+
+@media (max-width: 520px) {
+  .startForm {
+    flex-direction: column;
+    align-items: stretch;
+    border-radius: 24px;
+    padding: 5px;
+  }
+
+  .startIcon {
+    top: 17px;
+  }
+
+  .startInput {
+    padding-left: 40px;
+  }
 }
 
 .trusted {
@@ -1932,5 +2015,174 @@
   .legal {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* ---------- Signed-in account chip (navbars) ---------- */
+
+.accountChip {
+  display: inline-flex;
+  height: 32px;
+  max-width: 200px;
+  align-items: center;
+  gap: 7px;
+  margin-left: 6px;
+  border-radius: 99px;
+  padding: 3px 9px 3px 3px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #0000000a, 0 1px 2px #0000001a;
+  color: #222;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  transition: background-color 0.2s ease;
+}
+
+.accountChip:hover {
+  background: #f2f2f2;
+}
+
+.chipAvatar {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #18181b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.chipAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chipName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipChev {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: #8a8a8a;
+}
+
+/* Portalled to <body>, outside .page, so it uses literal colors. */
+.chipMenu {
+  position: fixed;
+  z-index: 100;
+  display: flex;
+  width: 240px;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 16px;
+  padding: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #0000000d, 0 2px 4px #0000000a, 0 12px 24px -6px #00000014, 0 40px 80px -20px #0000001f;
+  color: #000;
+  font-family: var(--font-sans);
+  color-scheme: light;
+  animation: chipMenu 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes chipMenu {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.chipWho {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #e7e7e7;
+  padding: 8px 10px 10px;
+}
+
+.chipWho strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipWho span {
+  overflow: hidden;
+  color: #707070;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipItem {
+  display: flex;
+  height: 36px;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  padding-inline: 10px;
+  color: #222;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.chipItem:hover {
+  background: #f4f4f5;
+}
+
+.chipItem svg {
+  width: 16px;
+  height: 16px;
+  color: #595959;
+}
+
+.chipLoading {
+  pointer-events: none;
+}
+
+.chipLoading .chipAvatar {
+  background: #f4f4f5;
+  color: #52525b;
+}
+
+.chipSpin {
+  width: 14px;
+  height: 14px;
+  animation: spin 0.9s linear infinite;
+}
+
+.chipBar {
+  width: 64px;
+  height: 10px;
+  margin-right: 4px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #ececec 25%, #f7f7f7 50%, #ececec 75%);
+  background-size: 200% 100%;
+  animation: chipShimmer 1.2s linear infinite;
+}
+
+@keyframes chipShimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chipSpin,
+  .chipBar {
+    animation: none;
   }
 }

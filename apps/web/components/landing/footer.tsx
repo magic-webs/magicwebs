@@ -64,7 +64,7 @@ const COLUMNS = [
   {
     title: "Product",
     links: [
-      { label: "Start building", href: "/dashboard" },
+      { label: "Start building", href: "/start" },
       { label: "Features", href: "#features" },
       { label: "MCP server", href: "#setup" },
       { label: "FAQ", href: "#faq" },
@@ -176,8 +176,8 @@ export function Footer() {
             <span data-cta-line>in seconds</span>
           </h2>
           <div className={s.ctaActions}>
-            <Link className={s.ctaLight} href="/dashboard">
-              Clone your first page
+            <Link className={s.ctaLight} href="/start">
+              Start with your website
             </Link>
             <a className={s.ctaDark} href="#setup">
               Connect your agent<span className={s.ctaMore}>&nbsp;over MCP</span>

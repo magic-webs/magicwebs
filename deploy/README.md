@@ -10,13 +10,17 @@
 
 ## Which Convex deployment
 
-All services currently use the **dev** deployment `watchful-robin-407`. Keep in mind:
+| Deployment | Used by |
+|---|---|
+| **prod** `fearless-stork-537` | Vercel web app, VPS API and crawler, edge worker |
+| **dev** `watchful-robin-407` | Local development only (`bun run dev` / `convex dev`) |
 
-- **Saving a file under `packages/backend/convex/` pushes it live.** While `bun run dev` (or `convex dev`) runs locally, every save goes straight to the deployment that the hosted web app, API and crawler use. A half-finished schema change can break them.
-- **A local crawler competes for jobs.** A crawler running on your machine (`bun run dev` starts one) takes jobs from the same queue as the VPS workers.
-- **`SITE_URL` takes a single value.** Once it points to the Vercel domain, Google sign-in on `localhost:3000` redirects to the hosted app instead.
+- **Backend changes reach prod only through `bun --filter @magicwebs/backend deploy`** (`convex deploy`). Saving files while `convex dev` runs only touches dev.
+- **Deploy the backend before the services that need it.** A crawler or API image that calls a new function fails until that function is on prod.
+- **Env vars are per deployment.** Set prod values with `bunx convex env set --prod NAME value` from `packages/backend`.
+- **Google sign-in** needs `https://fearless-stork-537.convex.site/api/auth/callback/google` as a redirect URI. Dev keeps its own.
 
-To move to a separate prod deployment later, run `bun --filter @magicwebs/backend deploy` and set its env (SETUP-TODO step 3). Then change `CONVEX_URL` in both `.env` files on the VPS and `NEXT_PUBLIC_CONVEX_URL` in Vercel.
+Prod was seeded from a dev snapshot on 2026-11-10 (`convex export` → `convex import --prod --replace-all`). Dev data has diverged since then.
 
 ## VPS services (API and crawler)
 
@@ -66,7 +70,7 @@ These steps are already done for 187.127.186.119. Re-run them for a new server.
 
 Use [apps/crawler/.env.example](../apps/crawler/.env.example) as the template.
 
-- `CONVEX_URL`: the Convex deployment the platform uses. Today that is dev: `https://watchful-robin-407.convex.cloud`.
+- `CONVEX_URL`: the prod Convex deployment, `https://fearless-stork-537.convex.cloud`.
 - `WORKER_SECRET`: the same value as `WORKER_SECRET` in that deployment's Convex env.
 - `WORKER_ID`: leave it empty, so each replica picks its own id.
 - `R2_*`: a token with Object Read & Write.
@@ -74,7 +78,7 @@ Use [apps/crawler/.env.example](../apps/crawler/.env.example) as the template.
 ### API secrets: `/opt/magicwebs/api/api.env`
 
 ```
-CONVEX_URL=https://watchful-robin-407.convex.cloud
+CONVEX_URL=https://fearless-stork-537.convex.cloud
 AI_GATEWAY_API_KEY=<Vercel AI Gateway key>
 WEB_ORIGINS=https://build.magicwebs.ai
 R2_BUCKET=<same bucket as the crawler>
@@ -116,13 +120,13 @@ If the certificate does not appear, run `docker compose logs caddy` in `/opt/mag
 
    | Name | Value |
    |---|---|
-   | `NEXT_PUBLIC_CONVEX_URL` | `https://watchful-robin-407.convex.cloud` (the same deployment as the VPS services) |
+   | `NEXT_PUBLIC_CONVEX_URL` | `https://fearless-stork-537.convex.cloud` (prod, the same deployment as the VPS services) |
    | `NEXT_PUBLIC_API_URL` | `https://build-api.magicwebs.ai` |
 
 4. Click **Deploy**. Every push to `main` then deploys production, and every other branch or PR gets a preview URL.
 5. **Domain.** In Project → Settings → Domains, add e.g. `build.magicwebs.ai`. In Cloudflare, add the record Vercel shows (for a subdomain, `CNAME build → cname.vercel-dns.com`) with the proxy set to **DNS only**. Vercel issues the certificate itself, and the edge worker's wildcard route would catch a proxied record.
 6. Point the other services at the new domain:
-   - Convex env: `bunx convex env set SITE_URL https://build.magicwebs.ai`, run from `packages/backend` (add `--prod` once you move to a prod deployment). OAuth redirects back here.
+   - Convex env: `bunx convex env set SITE_URL https://build.magicwebs.ai`, run from `packages/backend` (add `--prod` for the live deployment). OAuth redirects back here.
    - The API's `WEB_ORIGINS` in `api.env`. Then run `docker compose up -d --force-recreate` in `/opt/magicwebs/api`.
 
 Preview deployments use their own `*.vercel.app` origin. The API's CORS rule blocks the AI chat there unless you add that origin to `WEB_ORIGINS`.

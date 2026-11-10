@@ -7,7 +7,7 @@
   "observability": { "enabled": true },
   "vars": {
     // Convex HTTP actions URL; the worker asks it which version is live.
-    "CONVEX_SITE_URL": "https://watchful-robin-407.convex.site"
+    "CONVEX_SITE_URL": "https://fearless-stork-537.convex.site"
   },
   "kv_namespaces": [
     // Create with `wrangler kv namespace create SITES` and paste the id here.

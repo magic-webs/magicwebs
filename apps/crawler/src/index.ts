@@ -1,4 +1,4 @@
-import { ConvexHttpClient } from "convex/browser"
+import { ConvexClient, ConvexHttpClient } from "convex/browser"
 
 import { api } from "@magicwebs/backend/convex/_generated/api"
 import type { Id } from "@magicwebs/backend/convex/_generated/dataModel"
@@ -89,18 +89,55 @@ async function handOff(jobId: Id<"jobs">, shot: Capture, text: string) {
   await convex.mutation(api.jobs.handOff, { secret, jobId, url: shot.finalUrl, screenshots, text })
 }
 
-let stopping = false
-process.on("SIGTERM", () => (stopping = true))
-process.on("SIGINT", () => (stopping = true))
+// Idle workers sleep until the subscription says a job is queued, or until the
+// slow timer fires to pick up jobs whose worker went silent.
+let wake: (() => void) | null = null
+let signalled = true
+function nudge() {
+  signalled = true
+  wake?.()
+}
+function idle(ms: number) {
+  if (signalled) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(done, ms)
+    function done() {
+      clearTimeout(timer)
+      wake = null
+      resolve()
+    }
+    wake = done
+  })
+}
 
-console.log(`Crawler ${env.workerId} polling for jobs`)
+const live = new ConvexClient(env.convexUrl)
+live.onUpdate(
+  api.jobs.hasQueued,
+  { secret },
+  (queued) => {
+    if (queued) nudge()
+  },
+  (error) => console.error("Job subscription error:", error),
+)
+
+let stopping = false
+const stop = () => {
+  stopping = true
+  wake?.()
+}
+process.on("SIGTERM", stop)
+process.on("SIGINT", stop)
+
+console.log(`Crawler ${env.workerId} waiting for jobs`)
 while (!stopping) {
+  signalled = false
   let worked = false
   try {
     worked = await runOnce()
   } catch (error) {
     console.error("Job loop error:", error)
   }
-  if (!worked) await Bun.sleep(env.pollIntervalMs)
+  if (!worked) await idle(env.staleCheckMs)
 }
+await live.close()
 process.exit(0)

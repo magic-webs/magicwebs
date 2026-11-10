@@ -8,7 +8,11 @@ export const env = {
   convexUrl: required("CONVEX_URL"),
   workerSecret: required("WORKER_SECRET"),
   workerId: process.env.WORKER_ID || `crawler-${crypto.randomUUID().slice(0, 8)}`,
-  pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 3000),
+  /**
+   * New jobs arrive over a subscription. This slow timer only picks up running
+   * jobs whose worker went silent (they go stale after 10 minutes).
+   */
+  staleCheckMs: Number(process.env.STALE_CHECK_MS ?? 2 * 60 * 1000),
   /** Vercel AI Gateway model id. Authenticated with AI_GATEWAY_API_KEY. */
   model: process.env.AI_MODEL ?? "anthropic/claude-haiku-5.5",
   r2: process.env.R2_BUCKET

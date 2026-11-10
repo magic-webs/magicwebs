@@ -29,6 +29,22 @@ export const latestForProject = query({
   },
 })
 
+/**
+ * Whether any job is waiting. Workers subscribe to this instead of polling
+ * `claim`, so an idle worker costs nothing until a job is queued.
+ */
+export const hasQueued = query({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    assertWorker(secret)
+    const job = await ctx.db
+      .query("jobs")
+      .withIndex("by_status", (q) => q.eq("status", "queued"))
+      .first()
+    return job !== null
+  },
+})
+
 /** Claim the oldest queued job, or a running job whose worker went silent. */
 export const claim = mutation({
   args: {

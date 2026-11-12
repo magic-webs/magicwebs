@@ -18,6 +18,7 @@ import { formatCost } from "@/components/dashboard/lib"
 import { NewProjectForm } from "@/components/dashboard/new-project"
 import { ProjectCard } from "@/components/dashboard/project-card"
 import { PageHeader } from "@/components/dashboard/shell"
+import { Games } from "@/components/onboarding/games"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -28,7 +29,8 @@ export default function OverviewPage() {
   const domains = useQuery(api.dashboard.domains)
 
   const live = projects?.filter((p) => p.publishedVersionId).length
-  const cloning = projects?.filter((p) => p.status === "cloning").length
+  const building = projects?.filter((p) => p.status === "cloning")
+  const cloning = building?.length
   const cost = projects?.reduce((sum, p) => sum + (p.usage?.costUsd ?? 0), 0)
   const customDomains = domains?.filter((d) => d.kind === "custom")
 
@@ -112,6 +114,23 @@ export default function OverviewPage() {
         </section>
 
         <section className="flex flex-col gap-3 lg:col-span-2">
+          {building && building.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Play while you wait</CardTitle>
+                <CardDescription>
+                  {building.length === 1 ? `${building[0]!.name} is` : `${building.length} sites are`} being built. This
+                  takes a few minutes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* The games are drawn in the light start-page look, so they keep it in dark mode too. */}
+                <div className="flex flex-col gap-3 rounded-xl bg-mw-bg p-3 text-mw-fg scheme-light">
+                  <Games sources={building.flatMap((p) => [p.name, p.sourceUrl.replace(/^https?:\/\/(www\.)?/, "")])} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <div className="flex items-center justify-between">
             <h2 className="font-medium">Activity</h2>
             <Button size="sm" variant="ghost" nativeButton={false} render={<Link href="/dashboard/activity" />}>

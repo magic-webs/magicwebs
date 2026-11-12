@@ -202,3 +202,4 @@
 @keyframes mw-breathe { 50% { opacity: 0.45; } }
 @keyframes mw-pulse { to { box-shadow: 0 0 0 10px #18181b00; } }
 @keyframes mw-badge { from { transform: scale(0.4); opacity: 0; } }
+@keyframes mw-drain { to { transform: scaleX(0); } }

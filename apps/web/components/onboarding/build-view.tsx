@@ -7,7 +7,6 @@ import {
   Check,
   CircleAlert,
   ExternalLink,
-  Gamepad2,
   Globe,
   Loader2,
   Monitor,
@@ -29,7 +28,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 
 import { AccountPanel, useAccountReady } from "./account-panel"
-import { BlocksGame } from "./blocks-game"
+import { Games } from "./games"
 import {
   card,
   cardPad,
@@ -289,14 +288,9 @@ function Build({ projectId }: { projectId: Id<"projects"> }) {
           // The board shrinks with the screen so the whole game stays in view.
           "min-[901px]:[&>:last-child]:max-w-[clamp(220px,calc(100dvh_-_380px),400px)]",
         )}
-        aria-label="Block puzzle"
+        aria-label="Games"
       >
-        <div className="flex items-center gap-2 text-[15px] font-semibold [&_svg]:size-[18px] [&_svg]:text-mw-accent">
-          <Gamepad2 />
-          <span>Blocks</span>
-          <span className={cn(mutedSmall, "ml-auto font-normal")}>Fill a row or column to clear it</span>
-        </div>
-        <BlocksGame />
+        <Games sources={[project.name, hostname, ...pages.map((p) => p.title)]} />
       </section>
     </div>
   )

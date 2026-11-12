@@ -213,8 +213,8 @@ export function ProjectActions({ project, className }: { project: Project; class
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {project.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This deletes the draft, every version and its domains, and takes {project.hostname} offline. It can&apos;t be
-              undone.
+              This deletes the draft, every version, its domains and leads, and its Magic Agent workspace with its
+              conversations, and takes {project.hostname} offline. It can&apos;t be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error && <p className="text-sm text-destructive">{error}</p>}

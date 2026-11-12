@@ -280,13 +280,14 @@ export const finishWorkspace = internalMutation({
     /** The account's session has ended: ask the person to sign in again. */
     accountId: v.optional(v.id("magicAgentAccounts")),
   },
-  handler: async (ctx, { projectId, workspaceSlug, channelKey, leadsUrl, error, accountId }) => {
+  handler: async (ctx, { projectId, workspaceSlug, channelKey, leadsUrl, error, accountId }): Promise<boolean> => {
     if (accountId && (await ctx.db.get(accountId))) await ctx.db.patch(accountId, { expiresAt: 0 })
     const project = await ctx.db.get(projectId)
-    if (!project) return
+    // Deleted while its workspace was being made: the caller deletes the workspace too.
+    if (!project) return false
     if (!channelKey || !leadsUrl) {
       await ctx.db.patch(projectId, { magicAgent: { status: "failed", workspaceSlug, error } })
-      return
+      return true
     }
     await ctx.db.patch(projectId, {
       magicAgent: { status: "ready", workspaceSlug, leadsUrl },
@@ -298,6 +299,7 @@ export const finishWorkspace = internalMutation({
     await ctx.scheduler.runAfter(0, internal.leads.deliverPending, { projectId })
     // A site already cloned fills its workspace now; one still cloning does when it's done.
     if (project.status === "ready") await queueAgentSync(ctx, projectId)
+    return true
   },
 })
 
@@ -330,7 +332,9 @@ export const createWorkspace = internalAction({
         ).slug
       const { channelKey } = await call<{ channelKey: string }>("mutation", "channels:websiteWidget", { workspaceSlug }, token)
       const { url: leadsUrl } = await call<{ url: string }>("mutation", "recordIntake:websiteEnquiries", { workspaceSlug }, token)
-      await ctx.runMutation(internal.magicAgent.finishWorkspace, { projectId, workspaceSlug, channelKey, leadsUrl })
+      const kept = await ctx.runMutation(internal.magicAgent.finishWorkspace, { projectId, workspaceSlug, channelKey, leadsUrl })
+      // The website was deleted while this ran; don't leave its workspace behind.
+      if (!kept) await call("mutation", "workspaces:removeForUser", { workspaceSlug }, token)
     } catch (error) {
       console.error("magicAgent.createWorkspace failed:", error)
       await ctx.runMutation(internal.magicAgent.finishWorkspace, {
@@ -338,6 +342,52 @@ export const createWorkspace = internalAction({
         workspaceSlug,
         error: error instanceof ConvexError && typeof error.data === "string" ? error.data : "Couldn't reach Magic Agent. Try again.",
       })
+    }
+  },
+})
+
+export const accountSession = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const account = await ctx.db
+      .query("magicAgentAccounts")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique()
+    return account?.sessionToken ?? null
+  },
+})
+
+const DELETE_RETRIES_MS = [60_000, 10 * 60_000, 60 * 60_000]
+
+/**
+ * Delete a deleted website's workspace on Magic Agent, so it leaves the
+ * person's workspace list there too. Retried a few times while Magic Agent
+ * can't be reached; gives up when the sign-in has ended.
+ */
+export const deleteWorkspace = internalAction({
+  args: { userId: v.id("users"), workspaceSlug: v.string(), attempt: v.optional(v.number()) },
+  handler: async (ctx, { userId, workspaceSlug, attempt = 0 }) => {
+    if (!deploymentUrl()) return
+    const sessionToken = await ctx.runQuery(internal.magicAgent.accountSession, { userId })
+    if (!sessionToken) {
+      console.warn(`magicAgent.deleteWorkspace: no Magic account for ${userId}; workspace ${workspaceSlug} left in place`)
+      return
+    }
+    try {
+      const token = await accessToken(sessionToken)
+      if (!token) {
+        console.warn(`magicAgent.deleteWorkspace: sign-in ended; workspace ${workspaceSlug} left in place`)
+        return
+      }
+      await call("mutation", "workspaces:removeForUser", { workspaceSlug }, token)
+    } catch (error) {
+      console.error(`magicAgent.deleteWorkspace ${workspaceSlug} failed:`, error)
+      // Magic Agent refused (not ours, no access): trying again won't change that.
+      if (error instanceof ConvexError) return
+      const delay = DELETE_RETRIES_MS[attempt]
+      if (delay !== undefined) {
+        await ctx.scheduler.runAfter(delay, internal.magicAgent.deleteWorkspace, { userId, workspaceSlug, attempt: attempt + 1 })
+      }
     }
   },
 })

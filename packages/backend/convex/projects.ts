@@ -196,14 +196,23 @@ export const rename = mutation({
 })
 
 /**
- * Delete a project with its draft, history and domains, and take its site off
- * the edge. Stored page blobs are content-addressed and may be shared, so they stay.
+ * Delete a project with its draft, history and domains, take its site off
+ * the edge and delete its Magic Agent workspace. Leads, posts and analytics,
+ * which can be many, are cleared in batches afterwards. Stored page blobs are
+ * content-addressed and may be shared, so they stay.
  */
 export const remove = mutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
     const project = await requireProject(ctx, projectId)
-    if (project.autoPublishId) await ctx.scheduler.cancel(project.autoPublishId)
+    if (project.autoPublishId) await cancelIfPending(ctx, project.autoPublishId)
+    if (project.agentSync?.scheduledId) await cancelIfPending(ctx, project.agentSync.scheduledId)
+
+    // A workspace still being made is deleted by createWorkspace once it sees the project gone.
+    const workspaceSlug = project.magicAgent?.workspaceSlug
+    if (project.userId && workspaceSlug) {
+      await ctx.scheduler.runAfter(0, internal.magicAgent.deleteWorkspace, { userId: project.userId, workspaceSlug })
+    }
 
     const domains = await ctx.db
       .query("domains")
@@ -240,5 +249,30 @@ export const remove = mutation({
       for (const row of rows) await ctx.db.delete(row._id)
     }
     await ctx.db.delete(projectId)
+    await ctx.scheduler.runAfter(0, internal.projects.purge, { projectId })
+  },
+})
+
+async function cancelIfPending(ctx: MutationCtx, id: Id<"_scheduled_functions">) {
+  const job = await ctx.db.system.get(id)
+  if (job?.state.kind === "pending") await ctx.scheduler.cancel(id)
+}
+
+const PURGE_BATCH = 500
+
+/** Clear a deleted project's leads, posts and analytics, a batch at a time. */
+export const purge = internalMutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const batches = [
+      await ctx.db.query("leads").withIndex("by_project", (q) => q.eq("projectId", projectId)).take(PURGE_BATCH),
+      await ctx.db.query("posts").withIndex("by_project", (q) => q.eq("projectId", projectId)).take(PURGE_BATCH),
+      await ctx.db.query("pageviews").withIndex("by_project_time", (q) => q.eq("projectId", projectId)).take(PURGE_BATCH),
+      await ctx.db.query("analyticsDays").withIndex("by_project_day", (q) => q.eq("projectId", projectId)).take(PURGE_BATCH),
+    ]
+    for (const rows of batches) for (const row of rows) await ctx.db.delete(row._id)
+    if (batches.some((rows) => rows.length === PURGE_BATCH)) {
+      await ctx.scheduler.runAfter(0, internal.projects.purge, { projectId })
+    }
   },
 })

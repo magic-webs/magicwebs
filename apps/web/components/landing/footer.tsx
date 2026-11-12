@@ -256,7 +256,14 @@ export function Footer() {
 
       <div className="flex items-center justify-between gap-4 border-t border-[#00000012] px-2 pt-5 text-[13px] text-mw-faint max-[640px]:flex-col max-[640px]:items-start">
         <p>© {new Date().getFullYear()} Magicwebs. All rights reserved.</p>
-        <p>Published pages are served from the edge on magicwebs.ai.</p>
+        <nav className="flex gap-5" aria-label="Legal">
+          <Link href="/privacy" className="hover:text-mw-strong">
+            Privacy
+          </Link>
+          <Link href="/terms" className="hover:text-mw-strong">
+            Terms
+          </Link>
+        </nav>
       </div>
 
       <div

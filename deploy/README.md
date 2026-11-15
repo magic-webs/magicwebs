@@ -36,7 +36,7 @@ Each service lives in `/opt/magicwebs/<service>` on the VPS:
 
 | File | What it is |
 |---|---|
-| `docker-compose.yml` (and `Caddyfile` for the API) | copied from `deploy/<service>/` on each deploy |
+| `docker-compose.yml` (and `<service>.caddy` for a service with a domain) | copied from `deploy/<service>/` on each deploy |
 | `.env` | `IMAGE_TAG=<sha>`, written by each deploy; shows which commit is running |
 | `<service>.env` | the service's secrets, kept **only** on the VPS |
 
@@ -104,13 +104,23 @@ The record must be DNS only:
 - Caddy gets its certificate from Let's Encrypt over port 80, which needs a direct connection to the VPS.
 - A proxied `build-api` record would be caught by the edge worker's `*.magicwebs.ai/*` route.
 
-The domain is set in [deploy/api/Caddyfile](api/Caddyfile). Check it once deployed:
+The domain is set in [deploy/api/api.caddy](api/api.caddy). Check it once deployed:
 
 ```powershell
 curl https://build-api.magicwebs.ai/health   # {"ok":true}
 ```
 
-If the certificate does not appear, run `docker compose logs caddy` in `/opt/magicwebs/api`. Also check that ports 80 and 443 are open in the **Hostinger panel firewall**, if you use it.
+If the certificate does not appear, run `docker compose logs caddy` in `/opt/magicwebs/edge`. Also check that ports 80 and 443 are open in the **Hostinger panel firewall**, if you use it.
+
+### Shared HTTPS: `/opt/magicwebs/edge`
+
+One Caddy ([deploy/edge](edge/docker-compose.yml)) owns ports 80 and 443 for every service on the VPS. That includes services from other repos, such as Magic Agent's marketing service.
+
+- A service with a domain ships a `<service>.caddy` site file. Its deploy copies the file to `/opt/magicwebs/edge/sites/` and reloads Caddy.
+- The service joins the external `edge` Docker network under its own alias, and the site proxies to that alias, e.g. `reverse_proxy magicwebs-api:8787`.
+- The edge stack is not deployed by CI. After changing `deploy/edge/`, copy it to the VPS and run `docker compose up -d` there.
+
+A new server needs `docker network create edge` and `install -d -o deploy -g deploy /opt/magicwebs/edge/sites` before the first deploy.
 
 ## Web on Vercel
 

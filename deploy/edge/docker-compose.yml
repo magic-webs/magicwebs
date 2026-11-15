@@ -1,0 +1,37 @@
+# Shared HTTPS for every service on the VPS, at /opt/magicwebs/edge. Not
+# deployed by CI: change it here, copy it over, `docker compose up -d`.
+#
+#   Caddyfile  imports sites/*.caddy
+#   sites/     one file per service, installed by that service's deploy
+#
+# Services reach Caddy over the external `edge` network, each under its own alias.
+name: magicwebs-edge
+
+services:
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+
+networks:
+  edge:
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:

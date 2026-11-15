@@ -112,9 +112,10 @@ jobs:
           echo "IMAGE_TAG=$TAG" > .env
           docker compose pull
           docker compose up -d --remove-orphans
-          # A changed Caddyfile is a bind mount, so the running Caddy has to be told to reload it.
-          if docker compose config --services | grep -qx caddy; then
-            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+          # A service with a site hands it to the shared Caddy in /opt/magicwebs/edge.
+          if [ -f "$SERVICE.caddy" ]; then
+            cp "$SERVICE.caddy" "/opt/magicwebs/edge/sites/$SERVICE.caddy"
+            docker compose -f /opt/magicwebs/edge/docker-compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile
           fi
           echo "Waiting for the containers to settle..."
           sleep 30
